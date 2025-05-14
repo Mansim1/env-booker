@@ -1,2 +1,2 @@
 # env-booker
-Environment-Booking System for PolicyCenter test environments.
+Environment Booking System for PolicyCenter test environments.
