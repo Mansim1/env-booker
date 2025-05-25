@@ -8,3 +8,5 @@ pytest
 pytest-flask
 ruff
 black
+Flask-SQLAlchemy>=3.0
+email-validator

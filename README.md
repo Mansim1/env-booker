@@ -1,4 +1,4 @@
-# EasyEnvBooker
+# Enviroment Booker
 
 ## Overview
 Environment-Booking System for PolicyCenter lower environments.
