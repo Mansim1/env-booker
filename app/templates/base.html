@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <title>{% block title %}EasyEnvBooker{% endblock %}</title>
+    <title>{% block title %}Enviroment Booker{% endblock %}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <!-- Bootstrap CSS -->
@@ -17,7 +17,7 @@
 
     <nav class="navbar navbar-expand-lg navbar-light bg-light">
       <div class="container">
-        <a class="navbar-brand" href="{{ url_for('auth.login') }}">EasyEnvBooker</a>
+        <a class="navbar-brand" href="{{ url_for('auth.login') }}">Enviroment Booker</a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu"
                 aria-controls="navMenu" aria-expanded="false" aria-label="Toggle navigation">
           <span class="navbar-toggler-icon"></span>
@@ -29,12 +29,7 @@
                 <a class="nav-link{% if request.endpoint.startswith('bookings.') %} active{% endif %}"
                    href="{{ url_for('auth.login') }}">Dashboard</a>
               </li>
-              {% if current_user.role == 'admin' %}
-              <li class="nav-item">
-                <a class="nav-link{% if request.endpoint.startswith('admin.') %} active{% endif %}"
-                   href="{{ url_for('admin.index') }}">Admin</a>
-              </li>
-              {% endif %}
+
               <li class="nav-item">
                 <a class="nav-link" href="{{ url_for('auth.logout') }}">Logout</a>
               </li>
@@ -70,7 +65,7 @@
 
     <footer class="bg-light text-center py-3 mt-auto">
       <div class="container">
-        <small class="text-muted">&copy; {{ current_year }} EasyEnvBooker. All rights reserved.</small>
+        <small class="text-muted">&copy; {{ current_year }} Enviroment Booker. All rights reserved.</small>
       </div>
     </footer>
 

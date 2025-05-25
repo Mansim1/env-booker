@@ -4,12 +4,6 @@ from wtforms.validators import (
     DataRequired, Email, EqualTo, Length, Regexp, ValidationError
 )
 
-# Custom validator to reject common SQL metacharacters
-def no_sql_injection(form, field):
-    forbidden = [";", "--", "/*", "*/", "@@"]
-    for token in forbidden:
-        if token in field.data:
-            raise ValidationError("Invalid characters in field.")
 
 class RegistrationForm(FlaskForm):
     email = StringField(
@@ -17,8 +11,7 @@ class RegistrationForm(FlaskForm):
         validators=[
             DataRequired(message="Email is required."),
             Email(message="Enter a valid email address."),
-            Length(max=120),
-            no_sql_injection
+            Length(max=120, message="Email must be 120 characters or fewer.")
         ],
         filters=[lambda x: x.strip() if x else None],
     )
@@ -41,3 +34,43 @@ class RegistrationForm(FlaskForm):
         ],
     )
     submit = SubmitField("Sign Up")
+
+    def validate_email(self, field):
+        # SQL-injection check
+        forbidden = [";", "--", "/*", "*/", "@@"]
+        for token in forbidden:
+            if token in (field.data or ""):
+                # wipe out earlier errors (e.g. the Email message)
+                field.errors[:] = []
+                # now raise only your SQL-injection message
+                raise ValidationError("Invalid characters in field.")
+            
+class LoginForm(FlaskForm):
+    email = StringField(
+        "Email",
+        validators=[
+            DataRequired(message="Email is required."),
+            Email(message="Enter a valid email address."),
+            Length(max=120, message='Email must be 120 characters or fewer.'),
+            
+        ],
+        filters=[lambda x: x.strip() if x else None],
+    )
+    password = PasswordField(
+        "Password",
+        validators=[
+            DataRequired(message="Password is required."),
+            Length(min=8, message="Password must be at least 8 characters.")
+        ],
+    )
+    submit = SubmitField("Log In")
+
+    def validate_email(self, field):
+        # SQL-injection check
+        forbidden = [";", "--", "/*", "*/", "@@"]
+        for token in forbidden:
+            if token in (field.data or ""):
+                # wipe out earlier errors (e.g. the Email message)
+                field.errors[:] = []
+                # now raise only your SQL-injection message
+                raise ValidationError("Invalid characters in field.")
