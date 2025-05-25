@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}Log In | Enviroment Booker{% endblock %}
+
+{% block content %}
+<div class="mx-auto" style="max-width: 360px;">
+  <h1 class="h3 text-center mb-4">Log In</h1>
+
+  <form method="post" novalidate>
+    {{ form.hidden_tag() }}
+    <div class="mb-3">
+      {{ form.email.label(class="form-label") }}
+      {{ form.email(class="form-control", placeholder="you@example.com", aria_label="Email Address") }}
+      {% for err in form.email.errors %}
+        <div class="form-text text-danger">{{ err }}</div>
+      {% endfor %}
+    </div>
+
+    <div class="mb-3">
+      {{ form.password.label(class="form-label") }}
+      {{ form.password(class="form-control", placeholder="Your password", aria_label="Password") }}
+      {% for err in form.password.errors %}
+        <div class="form-text text-danger">{{ err }}</div>
+      {% endfor %}
+    </div>
+
+    <div class="d-grid">
+      {{ form.submit(class="btn btn-primary btn-lg") }}
+    </div>
+
+    <p class="mt-3 text-center">
+      New to Enviroment Booker?
+      <a href="{{ url_for('auth.register') }}">Sign up</a>
+    </p>
+  </form>
+</div>
+{% endblock %}
