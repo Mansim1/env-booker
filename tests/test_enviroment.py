@@ -79,3 +79,26 @@ def test_environment_records_creator(client):
     env = Environment.query.filter_by(name="Recorder").first()
     assert env.created_by_email == "admin@example.com"
     assert b"Environment &#39;Recorder&#39; created by admin@example.com." in resp.data
+
+def test_edit_environment_success(client):
+    # seed one
+    client.post("/environments/new", data={"name":"ToEdit","owner_squad":"One"}, follow_redirects=True)
+    env = Environment.query.filter_by(name="ToEdit").first()
+    # edit it
+    resp = client.post(
+        f"/environments/{env.id}/edit",
+        data={"name":"EditedName","owner_squad":"Two"},
+        follow_redirects=True
+    )
+    assert b"Environment &#39;EditedName&#39; updated." in resp.data
+    assert Environment.query.filter_by(name="EditedName").first() is not None
+
+def test_delete_environment_success(client):
+    client.post("/environments/new", data={"name":"ToDelete","owner_squad":"One"}, follow_redirects=True)
+    env = Environment.query.filter_by(name="ToDelete").first()
+    resp = client.post(
+        f"/environments/{env.id}/delete",
+        follow_redirects=True
+    )
+    assert b"Environment &#39;ToDelete&#39; deleted." in resp.data
+    assert Environment.query.filter_by(name="ToDelete").first() is None
