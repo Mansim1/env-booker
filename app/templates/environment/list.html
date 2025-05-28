@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Available Environments</h2>
+  <a href="{{ url_for('environment.create_environment') }}" class="btn btn-primary">New Environment</a>
+  <table class="table mt-3">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Owner Squad</th>
+        <th>Created By</th>
+        <th>Created At</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for env in environments %}
+      <tr>
+        <td>{{ env.name }}</td>
+        <td>{{ env.owner_squad }}</td>
+        <td>{{ env.created_by_email }}</td>
+        <td>{{ env.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}
