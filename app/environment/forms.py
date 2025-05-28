@@ -1,5 +1,5 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, SubmitField
+from wtforms import StringField, SubmitField, HiddenField
 from wtforms.validators import DataRequired, Length, Regexp, ValidationError
 from app.models import Environment
 
@@ -12,6 +12,7 @@ def no_sql_injection(form, field):
             raise ValidationError("Invalid characters in field.")
 
 class EnvironmentForm(FlaskForm):
+    env_id = HiddenField()
     name = StringField(
         "Name",
         validators=[
@@ -33,7 +34,11 @@ class EnvironmentForm(FlaskForm):
     submit = SubmitField("Save")
 
     def validate_name(self, field):
-        if Environment.query.filter_by(name=field.data).first():
-            # clear earlier errors
+        existing = Environment.query.filter_by(name=field.data).first()
+        # If there is an existing env with that name, but it's not the one we're editing:
+        if existing and (not self.env_id.data or int(self.env_id.data) != existing.id):
             field.errors[:] = []
             raise ValidationError("That environment name is already in use.")
+
+class DeleteForm(FlaskForm):
+    submit = SubmitField("Delete")
