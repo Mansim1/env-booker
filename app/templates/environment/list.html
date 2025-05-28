@@ -1,14 +1,11 @@
 {% extends "base.html" %}
 {% block content %}
-  <h2>Available Environments</h2>
+  <h2>Environments</h2>
   <a href="{{ url_for('environment.create_environment') }}" class="btn btn-primary">New Environment</a>
   <table class="table mt-3">
     <thead>
       <tr>
-        <th>Name</th>
-        <th>Owner Squad</th>
-        <th>Created By</th>
-        <th>Created At</th>
+        <th>Name</th><th>Owner Squad</th><th>Created At</th><th>Created By</th><th>Actions</th>
       </tr>
     </thead>
     <tbody>
@@ -16,8 +13,37 @@
       <tr>
         <td>{{ env.name }}</td>
         <td>{{ env.owner_squad }}</td>
-        <td>{{ env.created_by_email }}</td>
         <td>{{ env.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td>{{ env.created_by_email }}</td>
+        <td>
+          <a href="{{ url_for('environment.edit_environment', env_id=env.id) }}"
+             class="btn btn-sm btn-secondary">Edit</a>
+          <!-- Delete button triggers modal -->
+          <button class="btn btn-sm btn-danger" data-bs-toggle="modal"
+                  data-bs-target="#deleteModal{{ env.id }}">Delete</button>
+
+          <!-- Modal -->
+          <div class="modal fade" id="deleteModal{{ env.id }}" tabindex="-1">
+            <div class="modal-dialog">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h5 class="modal-title">Confirm Delete</h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                  Are you sure you want to delete “{{ env.name }}”?
+                </div>
+                <div class="modal-footer">
+                  <form method="post" action="{{ url_for('environment.delete_environment', env_id=env.id) }}">
+                    {{ delete_form.csrf_token }}
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    {{ delete_form.submit(class="btn btn-danger") }}
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+        </td>
       </tr>
       {% endfor %}
     </tbody>
