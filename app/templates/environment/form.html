@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>New Environment</h2>
+  <form method="post">
+    {{ form.hidden_tag() }}
+    <div class="mb-3">
+      {{ form.name.label(class="form-label") }}
+      {{ form.name(class="form-control") }}
+      {% for e in form.name.errors %}
+        <div class="text-danger">{{ e }}</div>
+      {% endfor %}
+    </div>
+    <div class="mb-3">
+      {{ form.owner_squad.label(class="form-label") }}
+      {{ form.owner_squad(class="form-control") }}
+      {% for e in form.owner_squad.errors %}
+        <div class="text-danger">{{ e }}</div>
+      {% endfor %}
+    </div>
+    <div class="mb-3">
+      {{ form.submit(class="btn btn-primary") }}
+    </div>
+  </form>
+{% endblock %}
