@@ -2,6 +2,7 @@ from app.models import User
 from app import db
 from werkzeug.security import generate_password_hash
 
+
 class AuthService:
     @staticmethod
     def register(email, password):

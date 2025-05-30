@@ -1,4 +1,3 @@
-
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from app import db
 from app.auth.service import AuthService
@@ -8,7 +7,8 @@ from flask_login import login_user, logout_user, login_required
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
 
-@auth_bp.route("/register", methods=["GET","POST"])
+
+@auth_bp.route("/register", methods=["GET", "POST"])
 def register():
     form = RegistrationForm()
     if form.validate_on_submit():
@@ -20,7 +20,8 @@ def register():
             return redirect(url_for("auth.login"))
     return render_template("auth/register.html", form=form)
 
-@auth_bp.route("/login", methods=["GET","POST"])
+
+@auth_bp.route("/login", methods=["GET", "POST"])
 def login():
     form = LoginForm()
     if form.validate_on_submit():
@@ -31,6 +32,7 @@ def login():
             return redirect(url_for("main.index"))
         flash("Invalid email or password.", "danger")
     return render_template("auth/login.html", form=form)
+
 
 @auth_bp.route("/logout")
 @login_required
