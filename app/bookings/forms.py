@@ -1,24 +1,26 @@
+# app/bookings/forms.py
 from flask_wtf import FlaskForm
-from wtforms import SelectField, DateTimeField, SubmitField
-from wtforms.validators import DataRequired, ValidationError
-
-def parse_datetime(value):
-    # WTForms DateTimeField will parse string to datetime
-    return value
+from wtforms import DateTimeLocalField, SelectField, SubmitField
+from wtforms.validators import DataRequired
 
 class BookingForm(FlaskForm):
     environment = SelectField("Environment", coerce=int, validators=[DataRequired()])
-    start = DateTimeField(
-        "Start", format="%Y-%m-%d %H:%M", validators=[DataRequired()]
+    start = DateTimeLocalField(
+        "Start",
+        format="%Y-%m-%dT%H:%M",
+        validators=[DataRequired()],
+        render_kw={"type": "datetime-local"}
     )
-    end = DateTimeField(
-        "End", format="%Y-%m-%d %H:%M", validators=[DataRequired()]
+    end = DateTimeLocalField(
+        "End",
+        format="%Y-%m-%dT%H:%M",
+        validators=[DataRequired()],
+        render_kw={"type": "datetime-local"}
     )
     submit = SubmitField("Book")
-
+    
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # populate choices
         from app.models import Environment
         self.environment.choices = [
             (e.id, e.name) for e in Environment.query.order_by(Environment.name)

@@ -9,15 +9,15 @@
       {% for e in form.environment.errors %}<div class="text-danger">{{ e }}</div>{% endfor %}
     </div>
     <div class="mb-3">
-      {{ form.start.label(class="form-label") }}
-      {{ form.start(class="form-control") }}
-      {% for e in form.start.errors %}<div class="text-danger">{{ e }}</div>{% endfor %}
-    </div>
-    <div class="mb-3">
-      {{ form.end.label(class="form-label") }}
-      {{ form.end(class="form-control") }}
-      {% for e in form.end.errors %}<div class="text-danger">{{ e }}</div>{% endfor %}
-    </div>
+        {{ form.start.label(class="form-label") }}
+        {{ form.start(class="form-control") }}
+        {% for e in form.start.errors %}<div class="text-danger">{{ e }}</div>{% endfor %}
+      </div>
+      <div class="mb-3">
+        {{ form.end.label(class="form-label") }}
+        {{ form.end(class="form-control") }}
+        {% for e in form.end.errors %}<div class="text-danger">{{ e }}</div>{% endfor %}
+      </div>      
     {{ form.submit(class="btn btn-primary") }}
   </form>
 {% endblock %}
