@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Your Bookings</h2>
+  <a href="{{ url_for('bookings.create_booking') }}" class="btn btn-primary">New Booking</a>
+  <table class="table mt-3">
+    <thead><tr><th>Environment</th><th>Start</th><th>End</th><th>User</th></tr></thead>
+    <tbody>
+      {% for b in bookings %}
+      <tr>
+        <td>{{ b.environment.name }}</td>
+        <td>{{ b.start.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td>{{ b.end.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td>{{ b.user.email }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

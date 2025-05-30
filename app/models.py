@@ -4,6 +4,7 @@ from app import db
 from datetime import datetime, timezone
 
 class User(db.Model, UserMixin):
+    __tablename__ = "users"
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(128), nullable=False)
@@ -25,3 +26,17 @@ class Environment(db.Model):
 
     def __repr__(self):
         return f"<Environment {self.name} by {self.created_by_email}>"
+    
+
+class Booking(db.Model):
+    __tablename__ = "bookings"
+    id = db.Column(db.Integer, primary_key=True)
+    environment_id = db.Column(
+        db.Integer, db.ForeignKey("environments.id"), nullable=False
+    )
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    start = db.Column(db.DateTime, nullable=False)
+    end = db.Column(db.DateTime, nullable=False)
+
+    environment = db.relationship("Environment", backref="bookings")
+    user = db.relationship("User", backref="bookings")
