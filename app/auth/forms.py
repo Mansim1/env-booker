@@ -4,6 +4,8 @@ from wtforms.validators import (
     DataRequired, Email, EqualTo, Length, Regexp, ValidationError
 )
 
+from app.auth.validators import no_sql_injection
+
 
 class RegistrationForm(FlaskForm):
     email = StringField(
@@ -11,7 +13,8 @@ class RegistrationForm(FlaskForm):
         validators=[
             DataRequired(message="Email is required."),
             Email(message="Enter a valid email address."),
-            Length(max=120, message="Email must be 120 characters or fewer.")
+            Length(max=120, message="Email must be 120 characters or fewer."),
+            no_sql_injection
         ],
         filters=[lambda x: x.strip() if x else None],
     )
@@ -35,16 +38,6 @@ class RegistrationForm(FlaskForm):
     )
     submit = SubmitField("Sign Up")
 
-    def validate_email(self, field):
-        # SQL-injection check
-        forbidden = [";", "--", "/*", "*/", "@@"]
-        for token in forbidden:
-            if token in (field.data or ""):
-                # wipe out earlier errors (e.g. the Email message)
-                field.errors[:] = []
-                # now raise only your SQL-injection message
-                raise ValidationError("Invalid characters in field.")
-            
 class LoginForm(FlaskForm):
     email = StringField(
         "Email",
@@ -52,7 +45,7 @@ class LoginForm(FlaskForm):
             DataRequired(message="Email is required."),
             Email(message="Enter a valid email address."),
             Length(max=120, message='Email must be 120 characters or fewer.'),
-            
+            no_sql_injection
         ],
         filters=[lambda x: x.strip() if x else None],
     )
@@ -64,13 +57,3 @@ class LoginForm(FlaskForm):
         ],
     )
     submit = SubmitField("Log In")
-
-    def validate_email(self, field):
-        # SQL-injection check
-        forbidden = [";", "--", "/*", "*/", "@@"]
-        for token in forbidden:
-            if token in (field.data or ""):
-                # wipe out earlier errors (e.g. the Email message)
-                field.errors[:] = []
-                # now raise only your SQL-injection message
-                raise ValidationError("Invalid characters in field.")

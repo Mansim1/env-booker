@@ -1,15 +1,8 @@
 from flask_wtf import FlaskForm
 from wtforms import StringField, SubmitField, HiddenField
 from wtforms.validators import DataRequired, Length, Regexp, ValidationError
+from app.auth.validators import no_sql_injection
 from app.models import Environment
-
-def no_sql_injection(form, field):
-    forbidden = [";", "--", "/*", "*/", "@@", "@"]
-    for token in forbidden:
-        if token in (field.data or ""):
-            # clear any previous errors
-            field.errors[:] = []
-            raise ValidationError("Invalid characters in field.")
 
 class EnvironmentForm(FlaskForm):
     env_id = HiddenField()
