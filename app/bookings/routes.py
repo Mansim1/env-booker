@@ -130,12 +130,10 @@ def accept_suggestion():
 def create_series_booking():
     form = SeriesBookingForm()
     if form.validate_on_submit():
-        # Lookup environment via session.get to avoid deprecation warning
         env = db.session.get(Environment, form.environment.data)
         if env is None:
             abort(404)
 
-        # Unpack the combined datetime fields into date and time for the service
         start_dt = form.start_dt.data
         end_dt   = form.end_dt.data
 
@@ -153,13 +151,82 @@ def create_series_booking():
             start_time=start_time,
             end_time=end_time
         )
-
+        print(ok, result)
         if not ok:
-            flash(result, "danger")
+            if result.startswith("Series failed: clash"):
+                # Suggest an alternative series
+                sug_start_time, sug_end_time = BookingService.find_series_suggestion(
+                    env, start_date, end_date, form.days_of_week.data,
+                    start_time, end_time
+                )
+                if sug_start_time and sug_end_time:
+                    # Build flush message
+                    weekdays_str = ", ".join([dict(form.days_of_week.choices)[d] for d in form.days_of_week.data])
+                    link = url_for(
+                        "bookings.accept_series_suggestion",
+                        env_id=env.id,
+                        start_date=start_date.isoformat(),
+                        end_date=end_date.isoformat(),
+                        weekdays=",".join(form.days_of_week.data),
+                        start_time=sug_start_time.strftime("%H:%M"),
+                        end_time=sug_end_time.strftime("%H:%M")
+                    )
+                    msg = Markup(
+                        f"Series failed due to clash. Suggested series: weekdays {weekdays_str} "
+                        f"from {start_date.isoformat()} {sug_start_time.strftime('%H:%M')}-{sug_end_time.strftime('%H:%M')} "
+                        f"<a href='{link}' class='alert-link'>[Accept]</a>"
+                    )
+                    flash(msg, "info")
+                else:
+                    flash("Series failed: no alternative series available within ±3 hours.", "danger")
+            else:
+                flash(result, "danger")
+
             return redirect(url_for("bookings.create_series_booking"))
 
-        count = result
-        flash(f"Series booking confirmed: {count} slots for {env.name}.", "success")
+        flash(f"Series booking confirmed: {result} slots for {env.name}.", "success")
         return redirect(url_for("bookings.list_bookings"))
 
     return render_template("bookings/series_form.html", form=form)
+
+
+@bookings_bp.route("/accept_series_suggestion", methods=["GET"])
+@login_required
+def accept_series_suggestion():
+    env_id       = request.args.get("env_id", type=int)
+    start_date_s = request.args.get("start_date")
+    end_date_s   = request.args.get("end_date")
+    weekdays_csv = request.args.get("weekdays")
+    start_time_s = request.args.get("start_time")
+    end_time_s   = request.args.get("end_time")
+
+    env = db.session.get(Environment, env_id)
+    if env is None:
+        abort(404)
+
+    try:
+        from datetime import datetime
+        start_date = datetime.fromisoformat(start_date_s).date()
+        end_date   = datetime.fromisoformat(end_date_s).date()
+        weekdays   = weekdays_csv.split(",")
+        start_time = datetime.strptime(start_time_s, "%H:%M").time()
+        end_time   = datetime.strptime(end_time_s, "%H:%M").time()
+    except Exception:
+        abort(400, description="Invalid suggestion parameters.")
+
+    ok, result = BookingService.create_series(
+        user=current_user,
+        environment=env,
+        start_date=start_date,
+        end_date=end_date,
+        weekdays=weekdays,
+        start_time=start_time,
+        end_time=end_time
+    )
+    if not ok:
+        flash("Could not create suggested series booking.", "danger")
+        return redirect(url_for("bookings.create_series_booking"))
+
+    flash(f"Series booking confirmed: {result} slots for {env.name}.", "success")
+    return redirect(url_for("bookings.list_bookings"))
+

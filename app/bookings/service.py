@@ -129,3 +129,61 @@ class BookingService:
             offset += step
 
         return None, None
+    
+    @staticmethod
+    def find_series_suggestion(environment, start_date, end_date, weekdays, start_time, end_time):
+        """
+        Search for an alternative series slot by shifting the entire daily window
+        within ±3 hours of the original start_time. Returns:
+           (new_start_time, new_end_time) if a full series is free,
+           otherwise (None, None).
+        """
+        print(start_date)
+        print(end_date)
+        # Duration of each child slot
+        duration = datetime.combine(start_date, end_time) - datetime.combine(start_date, start_time)
+        window = timedelta(hours=3)
+
+        # Generate offsets in 15-minute steps, both earlier and later
+        step = timedelta(minutes=15)
+        offsets = []
+        offset = step
+        while offset <= window:
+            offsets.append(-offset)  # try earlier first
+            offsets.append(offset)   # then later
+            offset += step
+
+        # Helper to iterate each relevant date
+        def iter_dates():
+            current = start_date
+            one_day = timedelta(days=1)
+            while current <= end_date:
+                if str(current.weekday()) in weekdays:
+                    yield current
+                current += one_day
+
+        # Test a given offset for the entire series
+        def test_offset(offset_td):
+            for single_date in iter_dates():
+                # Use the original start_time (a time object) and offset the combined datetime
+                candidate_start = datetime.combine(single_date, start_time) + offset_td
+                candidate_end = candidate_start + duration
+                # Overlap check
+                clash = (
+                    Booking.query
+                    .filter(Booking.environment_id == environment.id)
+                    .filter(Booking.end > candidate_start, Booking.start < candidate_end)
+                    .first()
+                )
+                if clash:
+                    return False
+            return True
+
+        for offset_td in offsets:
+            if test_offset(offset_td):
+                # Return the new time-only pairs for the first day
+                new_start_dt = datetime.combine(start_date, start_time) + offset_td
+                new_end_dt = new_start_dt + duration
+                return new_start_dt.time(), new_end_dt.time()
+
+        return None, None

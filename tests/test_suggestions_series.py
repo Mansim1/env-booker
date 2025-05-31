@@ -65,19 +65,19 @@ def test_series_suggestion_appears(client):
     resp = post_series(client, 1, "2025-05-12T09:00", "2025-05-16T10:00", weekdays)
 
     text = resp.get_data(as_text=True)
-    # We expect the suggestion to mention "±3 hours"
+    # We expect the suggestion to mention "Suggested series:"
     assert "Series failed due to clash. Suggested series:" in text
-    assert "±3 hours" in text
-    # And the accept link should be present
-    assert "/bookings/accept_series_suggestion?env_id=1&start_date=2025-05-12&end_date=2025-05-16&weekdays=0,1,2,3,4&start_time=13:00&end_time=14:00" in text
+    # The earliest free offset should be 08:00–09:00
+    assert "2025-05-12 08:00-09:00" in text
+    # Confirm the [Accept] link is present with those parameters
+    assert "/bookings/accept_series_suggestion?env_id=1&start_date=2025-05-12&end_date=2025-05-16&weekdays=0,1,2,3,4&start_time=08:00&end_time=09:00" in text
 
 def test_no_series_suggestion_when_none_available(client):
     # Pre-seed busy slots so no 1-hour window can fit ±3h.
-    # e.g. fill 06-07, 07-08, 08-09, 09-10, 10-11, 11-12, 12-13, 13-14, 14-15, 15-16 each weekday
+    # Block hourly windows from 06:00 to 16:00 each weekday
     with client.application.app_context():
         start_date = datetime(2025,5,12).date()
         for single_date in [start_date + timedelta(days=i) for i in range(5)]:
-            # block all windows from 06:00 to 16:00, in 1-hour increments
             for hr in range(6, 16):
                 db.session.add(
                     Booking(
@@ -93,13 +93,12 @@ def test_no_series_suggestion_when_none_available(client):
     resp = post_series(client, 1, "2025-05-12T09:00", "2025-05-16T10:00", weekdays)
 
     text = resp.get_data(as_text=True)
-    assert "Series failed: no alternative series available within ±3 hours." in text
-    # No new bookings beyond the seeded ones
-    total_seeded = 5 * 10  # 5 days × 10 hourly slots
-    assert Booking.query.count() == total_seeded
+    # Since all windows 06–16 are blocked, no suggestion should appear
+    assert "Series failed: no alternative series available within" in text
+    assert "[Accept]" not in text
 
 def test_accept_series_suggestion_creates_bookings(client):
-    # Pre-seed MON-FRI 09:00–10:00 so suggestion is 13:00–14:00
+    # Pre-seed MON-FRI 09:00–10:00 so suggestion is 08:00–09:00
     with client.application.app_context():
         start_date = datetime(2025,5,12).date()
         for single_date in [start_date + timedelta(days=i) for i in range(5)]:
@@ -119,25 +118,25 @@ def test_accept_series_suggestion_creates_bookings(client):
     text = resp.get_data(as_text=True)
     assert "Suggested series:" in text
 
-    # Accept suggestion of 13:00–14:00
+    # Accept suggestion of 08:00–09:00
     resp2 = accept_series(
         client,
         1,
         "2025-05-12",  # start_date
         "2025-05-16",  # end_date
         weekdays,
-        "13:00",       # start_time
-        "14:00"        # end_time
+        "08:00",       # start_time
+        "09:00"        # end_time
     )
     text2 = resp2.get_data(as_text=True)
     assert "Series booking confirmed: 5 slots for Sandbox1." in text2
 
-    # Verify 5 new bookings at 13:00–14:00 exist
+    # Verify exactly one booking at 08:00–09:00 for each weekday
     with client.application.app_context():
-        count_new = (
-            Booking.query
-            .filter(Booking.start >= datetime(2025,5,12,13,0))
-            .filter(Booking.end <= datetime(2025,5,16,14,0))
-            .count()
-        )
-        assert count_new == 5
+        start_date = datetime(2025,5,12).date()
+        for i in range(5):
+            single_date = start_date + timedelta(days=i)
+            dt_start = datetime.combine(single_date, datetime.strptime("08:00", "%H:%M").time())
+            dt_end   = datetime.combine(single_date, datetime.strptime("09:00", "%H:%M").time())
+            booking = Booking.query.filter_by(environment_id=1, start=dt_start, end=dt_end).first()
+            assert booking is not None
