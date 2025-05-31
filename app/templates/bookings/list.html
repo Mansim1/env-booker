@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block content %}
+  <div class="container mt-4">
+    <h2>Bookings</h2>
+
+    <a href="{{ url_for('bookings.create_booking') }}" class="btn btn-primary mb-3">
+      New Booking
+    </a>
+
+    {% if bookings %}
+      <table class="table table-striped">
+        <thead>
+          <tr>
+            <th>Environment</th>
+            <th>Start</th>
+            <th>End</th>
+            {% if current_user.role == "admin" %}
+              <th>User</th>
+            {% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for b in bookings %}
+          <tr>
+            <td>{{ b.environment.name }}</td>
+            <td>{{ b.start.strftime("%Y-%m-%d %H:%M") }}</td>
+            <td>{{ b.end.strftime("%Y-%m-%d %H:%M") }}</td>
+            {% if current_user.role == "admin" %}
+              <td>{{ b.user.email }}</td>
+            {% endif %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>No bookings found.</p>
+    {% endif %}
+  </div>
+{% endblock %}
