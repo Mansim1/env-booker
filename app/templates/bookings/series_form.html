@@ -1,0 +1,66 @@
+ {% extends "base.html" %}
+{% block content %}
+  <div class="container mt-4">
+    <h2>New Series Booking</h2>
+
+    <form method="post">
+      {{ form.hidden_tag() }}
+
+      <div class="mb-3">
+        {{ form.environment.label(class="form-label") }}
+        {{ form.environment(class="form-select") }}
+        {% for e in form.environment.errors %}
+          <div class="text-danger">{{ e }}</div>
+        {% endfor %}
+      </div>
+
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          {{ form.start_date.label(class="form-label") }}
+          {{ form.start_date(class="form-control") }}
+          {% for e in form.start_date.errors %}
+            <div class="text-danger">{{ e }}</div>
+          {% endfor %}
+        </div>
+        <div class="col-md-6 mb-3">
+          {{ form.end_date.label(class="form-label") }}
+          {{ form.end_date(class="form-control") }}
+          {% for e in form.end_date.errors %}
+            <div class="text-danger">{{ e }}</div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="mb-3">
+        {{ form.days_of_week.label(class="form-label") }}
+        {{ form.days_of_week(class="form-select", multiple=true) }}
+        <div class="form-text">
+          (Hold Ctrl/Cmd to select multiple weekdays)
+        </div>
+        {% for e in form.days_of_week.errors %}
+          <div class="text-danger">{{ e }}</div>
+        {% endfor %}
+      </div>
+
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          {{ form.start_time.label(class="form-label") }}
+          {{ form.start_time(class="form-control") }}
+          {% for e in form.start_time.errors %}
+            <div class="text-danger">{{ e }}</div>
+          {% endfor %}
+        </div>
+        <div class="col-md-6 mb-3">
+          {{ form.end_time.label(class="form-label") }}
+          {{ form.end_time(class="form-control") }}
+          {% for e in form.end_time.errors %}
+            <div class="text-danger">{{ e }}</div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+      <a href="{{ url_for('bookings.list_bookings') }}" class="btn btn-secondary">Cancel</a>
+    </form>
+  </div>
+{% endblock %}
