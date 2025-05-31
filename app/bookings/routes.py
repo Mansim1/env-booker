@@ -4,6 +4,8 @@ from app import db
 from app.bookings.forms import BookingForm
 from app.bookings.service import BookingService
 from app.models import Environment, Booking
+from app.bookings.forms import SeriesBookingForm
+from flask import request
 
 bookings_bp = Blueprint("bookings", __name__, url_prefix="/bookings")
 
@@ -51,3 +53,43 @@ def create_booking():
         return redirect(url_for("bookings.list_bookings"))
 
     return render_template("bookings/form.html", form=form)
+
+
+@bookings_bp.route("/series", methods=["GET", "POST"])
+@login_required
+def create_series_booking():
+    form = SeriesBookingForm()
+    if form.validate_on_submit():
+        # Lookup environment via session.get to avoid deprecation warning
+        env = db.session.get(Environment, form.environment.data)
+        if env is None:
+            abort(404)
+
+        # Unpack the combined datetime fields into date and time for the service
+        start_dt = form.start_dt.data
+        end_dt   = form.end_dt.data
+
+        start_date = start_dt.date()
+        end_date   = end_dt.date()
+        start_time = start_dt.time()
+        end_time   = end_dt.time()
+
+        ok, result = BookingService.create_series(
+            user=current_user,
+            environment=env,
+            start_date=start_date,
+            end_date=end_date,
+            weekdays=form.days_of_week.data,
+            start_time=start_time,
+            end_time=end_time
+        )
+
+        if not ok:
+            flash(result, "danger")
+            return redirect(url_for("bookings.create_series_booking"))
+
+        count = result
+        flash(f"Series booking confirmed: {count} slots for {env.name}.", "success")
+        return redirect(url_for("bookings.list_bookings"))
+
+    return render_template("bookings/series_form.html", form=form)

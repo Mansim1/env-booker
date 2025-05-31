@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block content %}
+  <div class="container mt-4">
+    <h2>New Series Booking</h2>
+
+    <form method="post">
+      {{ form.hidden_tag() }}
+
+      <!-- Environment dropdown -->
+      <div class="mb-3">
+        {{ form.environment.label(class="form-label") }}
+        {{ form.environment(class="form-select") }}
+        {% for error in form.environment.errors %}
+          <div class="text-danger">{{ error }}</div>
+        {% endfor %}
+      </div>
+
+      <!-- Combined Start and End datetime -->
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          {{ form.start_dt.label(class="form-label") }}
+          {{ form.start_dt(class="form-control") }}
+          {% for error in form.start_dt.errors %}
+            <div class="text-danger">{{ error }}</div>
+          {% endfor %}
+        </div>
+        <div class="col-md-6 mb-3">
+          {{ form.end_dt.label(class="form-label") }}
+          {{ form.end_dt(class="form-control") }}
+          {% for error in form.end_dt.errors %}
+            <div class="text-danger">{{ error }}</div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Days of Week checkboxes -->
+      <div class="mb-3">
+        <label class="form-label">{{ form.days_of_week.label.text }}</label>
+        <div>
+          {% set selected_days = form.days_of_week.data or [] %}
+          {% for val, label in form.days_of_week.choices %}
+            <div class="form-check form-check-inline">
+              <input
+                class="form-check-input"
+                type="checkbox"
+                name="{{ form.days_of_week.name }}"
+                id="dow-{{ val }}"
+                value="{{ val }}"
+                {% if val in selected_days %}checked{% endif %}
+              >
+              <label class="form-check-label" for="dow-{{ val }}">{{ label }}</label>
+            </div>
+          {% endfor %}
+        </div>
+        {% for error in form.days_of_week.errors %}
+          <div class="text-danger mt-1">{{ error }}</div>
+        {% endfor %}
+      </div>
+
+      <!-- Submit / Cancel buttons -->
+      <div class="mt-4">
+        {{ form.submit(class="btn btn-primary") }}
+        <a href="{{ url_for('bookings.list_bookings') }}" class="btn btn-secondary ms-2">Cancel</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}
