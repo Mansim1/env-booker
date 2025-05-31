@@ -4,13 +4,44 @@ from app.models import Booking
 
 class BookingService:
     MAX_DURATION = timedelta(hours=8)
+    DAILY_UTILIZATION_CAP = 0.90
 
     @staticmethod
     def create_booking(user, environment, start, end):
+        # 1. Basic sanity checks
         if end <= start:
             return False, "End time must be after start time."
-        if (end - start) > BookingService.MAX_DURATION:
+        duration = end - start
+        if duration > BookingService.MAX_DURATION:
             return False, "Booking cannot exceed 8 hours."
+
+        # 2. Daily utilization check
+        #    Sum up all existing booking durations on the same calendar date
+        booking_date = start.date()
+        day_start = datetime.combine(booking_date, datetime.min.time())
+        day_end   = datetime.combine(booking_date, datetime.max.time())
+
+        # Query all bookings on this date for that environment
+        existing_bookings = (
+            Booking.query
+            .filter(Booking.environment_id == environment.id)
+            .filter(Booking.start >= day_start, Booking.start <= day_end)
+            .all()
+        )
+
+        total_seconds = 0
+        for b in existing_bookings:
+            total_seconds += (b.end - b.start).total_seconds()
+
+        # Add the proposed booking’s duration
+        total_seconds += duration.total_seconds()
+
+        # If total_seconds > 90% of 24h (i.e. 24h * 3600s * 0.90)
+        cap_seconds = 24 * 3600 * BookingService.DAILY_UTILIZATION_CAP
+        if total_seconds > cap_seconds:
+            return False, "Cannot book: daily utilization cap (90 %) reached."
+
+        # 3. Overlap check
         overlap = (
             Booking.query
             .filter(Booking.environment_id == environment.id)
@@ -19,6 +50,8 @@ class BookingService:
         )
         if overlap:
             return False, "This slot is already booked."
+
+        # 4. Create the booking
         booking = Booking(
             environment_id=environment.id,
             user_id=user.id,
