@@ -7,13 +7,10 @@ class BookingService:
 
     @staticmethod
     def create_booking(user, environment, start, end):
-        # 1. End must be after start
         if end <= start:
             return False, "End time must be after start time."
-        # 2. Duration limit
-        if end - start > BookingService.MAX_DURATION:
+        if (end - start) > BookingService.MAX_DURATION:
             return False, "Booking cannot exceed 8 hours."
-        # 3. Overlap check
         overlap = (
             Booking.query
             .filter(Booking.environment_id == environment.id)
@@ -22,8 +19,6 @@ class BookingService:
         )
         if overlap:
             return False, "This slot is already booked."
-
-        # 4. Create and commit
         booking = Booking(
             environment_id=environment.id,
             user_id=user.id,
@@ -33,7 +28,6 @@ class BookingService:
         db.session.add(booking)
         db.session.commit()
         return True, booking
-
 
     @staticmethod
     def create_series(user, environment, start_date, end_date, weekdays, start_time, end_time):
@@ -95,3 +89,101 @@ class BookingService:
         except Exception as e:
             session.rollback()
             return False, "Series failed: unexpected error."
+
+    @staticmethod
+    def find_suggestion(environment, desired_start, desired_end):
+        """
+        Search for a free slot of the same duration within ±3 hours of desired_start.
+        Returns (new_start, new_end) or (None, None) if none found.
+        """
+        duration = desired_end - desired_start
+        window = timedelta(hours=3)
+        earliest_start = desired_start - window
+        latest_start = desired_start + window
+
+        # Helper to test overlap
+        def is_free(start_dt, end_dt):
+            clash = (
+                Booking.query
+                .filter(Booking.environment_id == environment.id)
+                .filter(Booking.end > start_dt, Booking.start < end_dt)
+                .first()
+            )
+            return clash is None
+
+        # Try offsets in 15-minute increments
+        step = timedelta(minutes=15)
+        offset = step
+        while offset <= window:
+            # Try earlier slot first
+            new_start = desired_start - offset
+            new_end = new_start + duration
+            if new_start >= earliest_start and is_free(new_start, new_end):
+                return new_start, new_end
+            # Then try later slot
+            new_start = desired_start + offset
+            new_end = new_start + duration
+            if new_end <= desired_end + window and is_free(new_start, new_end):
+                return new_start, new_end
+
+            offset += step
+
+        return None, None
+    
+    @staticmethod
+    def find_series_suggestion(environment, start_date, end_date, weekdays, start_time, end_time):
+        """
+        Search for an alternative series slot by shifting the entire daily window
+        within ±3 hours of the original start_time. Returns:
+           (new_start_time, new_end_time) if a full series is free,
+           otherwise (None, None).
+        """
+        print(start_date)
+        print(end_date)
+        # Duration of each child slot
+        duration = datetime.combine(start_date, end_time) - datetime.combine(start_date, start_time)
+        window = timedelta(hours=3)
+
+        # Generate offsets in 15-minute steps, both earlier and later
+        step = timedelta(minutes=15)
+        offsets = []
+        offset = step
+        while offset <= window:
+            offsets.append(-offset)  # try earlier first
+            offsets.append(offset)   # then later
+            offset += step
+
+        # Helper to iterate each relevant date
+        def iter_dates():
+            current = start_date
+            one_day = timedelta(days=1)
+            while current <= end_date:
+                if str(current.weekday()) in weekdays:
+                    yield current
+                current += one_day
+
+        # Test a given offset for the entire series
+        def test_offset(offset_td):
+            for single_date in iter_dates():
+                # Use the original start_time (a time object) and offset the combined datetime
+                candidate_start = datetime.combine(single_date, start_time) + offset_td
+                candidate_end = candidate_start + duration
+                # Overlap check
+                clash = (
+                    Booking.query
+                    .filter(Booking.environment_id == environment.id)
+                    .filter(Booking.end > candidate_start, Booking.start < candidate_end)
+                    .first()
+                )
+                if clash:
+                    return False
+            return True
+
+        for offset_td in offsets:
+            if test_offset(offset_td):
+                # Return the new time-only pairs for the first day
+                new_start_dt = datetime.combine(start_date, start_time) + offset_td
+                new_end_dt = new_start_dt + duration
+                return new_start_dt.time(), new_end_dt.time()
+
+        return None, None
