@@ -60,19 +60,30 @@ def create_booking():
 def create_series_booking():
     form = SeriesBookingForm()
     if form.validate_on_submit():
+        # Lookup environment via session.get to avoid deprecation warning
         env = db.session.get(Environment, form.environment.data)
         if env is None:
             abort(404)
 
+        # Unpack the combined datetime fields into date and time for the service
+        start_dt = form.start_dt.data
+        end_dt   = form.end_dt.data
+
+        start_date = start_dt.date()
+        end_date   = end_dt.date()
+        start_time = start_dt.time()
+        end_time   = end_dt.time()
+
         ok, result = BookingService.create_series(
             user=current_user,
             environment=env,
-            start_date=form.start_date.data,
-            end_date=form.end_date.data,
+            start_date=start_date,
+            end_date=end_date,
             weekdays=form.days_of_week.data,
-            start_time=form.start_time.data,
-            end_time=form.end_time.data
+            start_time=start_time,
+            end_time=end_time
         )
+
         if not ok:
             flash(result, "danger")
             return redirect(url_for("bookings.create_series_booking"))

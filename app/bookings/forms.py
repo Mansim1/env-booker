@@ -28,17 +28,17 @@ class BookingForm(FlaskForm):
 
 class SeriesBookingForm(FlaskForm):
     environment = SelectField("Environment", coerce=int, validators=[DataRequired()])
-    start_date = DateField(
-        "Start Date",
-        format="%Y-%m-%d",
-        validators=[DataRequired(message="Start Date is required.")],
-        render_kw={"type": "date"},
+    start_dt = DateTimeLocalField(
+        "Start (first slot)",
+        format="%Y-%m-%dT%H:%M",
+        validators=[DataRequired(message="Start Date & Time required.")],
+        render_kw={"type": "datetime-local"},
     )
-    end_date = DateField(
-        "End Date",
-        format="%Y-%m-%d",
-        validators=[DataRequired(message="End Date is required.")],
-        render_kw={"type": "date"},
+    end_dt = DateTimeLocalField(
+        "End (last slot)",
+        format="%Y-%m-%dT%H:%M",
+        validators=[DataRequired(message="End Date & Time required.")],
+        render_kw={"type": "datetime-local"},
     )
     days_of_week = SelectMultipleField(
         "Days of Week",
@@ -51,19 +51,7 @@ class SeriesBookingForm(FlaskForm):
             ("5", "Saturday"),
             ("6", "Sunday"),
         ],
-        validators=[DataRequired(message="Select at least one day of week.")],
-    )
-    start_time = TimeField(
-        "Start Time",
-        format="%H:%M",
-        validators=[DataRequired(message="Start Time is required.")],
-        render_kw={"type": "time"},
-    )
-    end_time = TimeField(
-        "End Time",
-        format="%H:%M",
-        validators=[DataRequired(message="End Time is required.")],
-        render_kw={"type": "time"},
+        validators=[DataRequired(message="Select at least one day.")],
     )
     submit = SubmitField("Book Series")
 
@@ -74,10 +62,10 @@ class SeriesBookingForm(FlaskForm):
             (e.id, e.name) for e in Environment.query.order_by(Environment.name)
         ]
 
-    def validate_end_date(self, field):
-        if self.start_date.data and field.data < self.start_date.data:
-            raise ValidationError("End Date must be on or after Start Date.")
+    def validate_end_dt(self, field):
+        if self.start_dt.data and field.data <= self.start_dt.data:
+            raise ValidationError("End must be after Start.")
 
-    def validate_end_time(self, field):
-        if self.start_time.data and field.data <= self.start_time.data:
-            raise ValidationError("End Time must be after Start Time.")
+    def validate_days_of_week(self, field):
+        if not field.data:
+            raise ValidationError("Select at least one day of week.")
