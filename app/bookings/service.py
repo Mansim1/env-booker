@@ -7,13 +7,10 @@ class BookingService:
 
     @staticmethod
     def create_booking(user, environment, start, end):
-        # 1. End must be after start
         if end <= start:
             return False, "End time must be after start time."
-        # 2. Duration limit
-        if end - start > BookingService.MAX_DURATION:
+        if (end - start) > BookingService.MAX_DURATION:
             return False, "Booking cannot exceed 8 hours."
-        # 3. Overlap check
         overlap = (
             Booking.query
             .filter(Booking.environment_id == environment.id)
@@ -22,8 +19,6 @@ class BookingService:
         )
         if overlap:
             return False, "This slot is already booked."
-
-        # 4. Create and commit
         booking = Booking(
             environment_id=environment.id,
             user_id=user.id,
@@ -33,7 +28,6 @@ class BookingService:
         db.session.add(booking)
         db.session.commit()
         return True, booking
-
 
     @staticmethod
     def create_series(user, environment, start_date, end_date, weekdays, start_time, end_time):
@@ -95,3 +89,43 @@ class BookingService:
         except Exception as e:
             session.rollback()
             return False, "Series failed: unexpected error."
+
+    @staticmethod
+    def find_suggestion(environment, desired_start, desired_end):
+        """
+        Search for a free slot of the same duration within ±3 hours of desired_start.
+        Returns (new_start, new_end) or (None, None) if none found.
+        """
+        duration = desired_end - desired_start
+        window = timedelta(hours=3)
+        earliest_start = desired_start - window
+        latest_start = desired_start + window
+
+        # Helper to test overlap
+        def is_free(start_dt, end_dt):
+            clash = (
+                Booking.query
+                .filter(Booking.environment_id == environment.id)
+                .filter(Booking.end > start_dt, Booking.start < end_dt)
+                .first()
+            )
+            return clash is None
+
+        # Try offsets in 15-minute increments
+        step = timedelta(minutes=15)
+        offset = step
+        while offset <= window:
+            # Try earlier slot first
+            new_start = desired_start - offset
+            new_end = new_start + duration
+            if new_start >= earliest_start and is_free(new_start, new_end):
+                return new_start, new_end
+            # Then try later slot
+            new_start = desired_start + offset
+            new_end = new_start + duration
+            if new_end <= desired_end + window and is_free(new_start, new_end):
+                return new_start, new_end
+
+            offset += step
+
+        return None, None
