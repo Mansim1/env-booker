@@ -1,5 +1,6 @@
+from datetime import datetime
 from flask import (
-    Blueprint, render_template, redirect, url_for, flash, abort, request
+    Blueprint, Response, render_template, redirect, url_for, flash, abort, request
 )
 from flask_login import login_required, current_user
 from markupsafe import Markup
@@ -230,3 +231,50 @@ def accept_series_suggestion():
     flash(f"Series booking confirmed: {result} slots for {env.name}.", "success")
     return redirect(url_for("bookings.list_bookings"))
 
+@bookings_bp.route("/<int:booking_id>/download", methods=["GET"])
+@login_required
+def download_ics(booking_id):
+    """
+    Generate a valid .ics file for booking_id and serve it as an attachment.
+    Only the booking owner (or an admin) may download.
+    """
+    booking = db.session.get(Booking, booking_id)
+    if booking is None:
+        abort(404)
+
+    # Only allow the owning user or an admin to download
+    if not (current_user.role == "admin" or booking.user_id == current_user.id):
+        abort(403)
+
+    # Build iCalendar content
+    # UID: booking-<id>@easyenvbooker.local
+    # DTSTAMP: now in UTC, formatted as YYYYMMDDTHHMMSSZ
+    # DTSTART/DTEND: booking.start/end in local time, formatted as YYYYMMDDTHHMMSS
+    now_utc = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+
+    dtstart = booking.start.strftime("%Y%m%dT%H%M%S")
+    dtend = booking.end.strftime("%Y%m%dT%H%M%S")
+    env_name = booking.environment.name
+
+    ics_lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//EasyEnvBooker//BookingCalendar//EN",
+        "BEGIN:VEVENT",
+        f"UID:booking-{booking.id}@easyenvbooker.local",
+        f"DTSTAMP:{now_utc}",
+        f"DTSTART:{dtstart}",
+        f"DTEND:{dtend}",
+        f"SUMMARY:Booking for {env_name}",
+        "END:VEVENT",
+        "END:VCALENDAR",
+        ""
+    ]
+    ics_content = "\r\n".join(ics_lines)
+
+    filename = f"booking-{booking.id}.ics"
+    headers = {
+        "Content-Disposition": f"attachment; filename={filename}",
+        "Content-Type": "text/calendar; charset=utf-8"
+    }
+    return Response(ics_content, headers=headers)
