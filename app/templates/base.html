@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <title>{% block title %}Enviroment Booker{% endblock %}</title>
+    <title>{% block title %}Environment Booker{% endblock %}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <!-- Bootstrap CSS -->
@@ -17,22 +17,25 @@
 
     <nav class="navbar navbar-expand-lg navbar-light bg-light">
       <div class="container">
-        <a class="navbar-brand" href="{{ url_for('auth.login') }}">Enviroment Booker</a>
+        <a class="navbar-brand" href="{{ url_for('main.dashboard') }}">Environment Booker</a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu"
                 aria-controls="navMenu" aria-expanded="false" aria-label="Toggle navigation">
           <span class="navbar-toggler-icon"></span>
         </button>
+
         <div class="collapse navbar-collapse" id="navMenu">
-          <ul class="navbar-nav ms-auto">
+          <ul class="navbar-nav ms-auto align-items-center">
             {% if current_user.is_authenticated %}
-              <li class="nav-item">
-                <a class="nav-link{% if request.endpoint.startswith('bookings.') %} active{% endif %}"
-                   href="{{ url_for('auth.login') }}">Dashboard</a>
+              <li class="nav-item me-3">
+                <span class="navbar-text">
+                  Logged in as <strong>{{ current_user.role }}</strong>
+                </span>
               </li>
 
               <li class="nav-item">
                 <a class="nav-link" href="{{ url_for('auth.logout') }}">Logout</a>
               </li>
+
             {% else %}
               <li class="nav-item">
                 <a class="nav-link{% if request.endpoint=='auth.login' %} active{% endif %}"
@@ -53,7 +56,7 @@
         {% if messages %}
           {% for category, msg in messages %}
             <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-              {{ msg }}
+              {{ msg|safe }}
               <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
           {% endfor %}
@@ -65,7 +68,7 @@
 
     <footer class="bg-light text-center py-3 mt-auto">
       <div class="container">
-        <small class="text-muted">&copy; {{ current_year }} Enviroment Booker. All rights reserved.</small>
+        <small class="text-muted"> Environment Booker. </small>
       </div>
     </footer>
 
