@@ -1,0 +1,39 @@
+{# app/templates/audit/list.html #}
+{% extends "base.html" %}
+{% block title %}Audit Log — Environment Booker{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <h2>Override Audit Log</h2>
+  <table class="table table-hover">
+    <thead>
+      <tr>
+        <th scope="col">When</th>
+        <th scope="col">Admin</th>
+        <th scope="col">Booking ID</th>
+        <th scope="col">Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for entry in logs %}
+      <tr>
+        <td>{{ entry.timestamp.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+        <td>{{ entry.actor.email }}</td>
+        <td>
+          <a href="{{ url_for('bookings.view_booking', booking_id=entry.booking_id) }}">
+            {{ entry.booking_id }}
+          </a>
+        </td>
+        <td>
+          {% if entry.action == "forced_single_book" %}
+            Forced single booking
+          {% else %}
+            Forced series booking
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

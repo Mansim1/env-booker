@@ -41,11 +41,13 @@ def create_app(config_name=None):
     from app.auth.routes        import auth_bp
     from app.environment.routes import env_bp
     from app.bookings.routes import bookings_bp
+    from app.audit.routes import audit_bp
     # (future: bookings_bp, admin_bp, etc.)
 
     app.register_blueprint(main_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(env_bp)
     app.register_blueprint(bookings_bp)
+    app.register_blueprint(audit_bp)
 
     return app
