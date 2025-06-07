@@ -67,59 +67,75 @@ class BookingService:
         """
         Attempt to create a series of bookings on the given weekdays between
         start_date and end_date (inclusive), each day from start_time to end_time.
-        If any single day clashes, roll back all and return (False, error_message).
-        Otherwise return (True, count_of_bookings).
+        If any single day breaks the rules or clashes, roll back all and return
+        (False, error_message). Otherwise return (True, count_of_bookings).
         """
-        # 1. Build a list of datetime pairs for each matching weekday
+        # 1. Build list of (start_dt, end_dt) for each weekday
         slots = []
-        current = datetime.combine(start_date, datetime.min.time())
-        last = datetime.combine(end_date, datetime.min.time())
-        delta_day = timedelta(days=1)
-        while current.date() <= last.date():
-            if str(current.weekday()) in weekdays:  # weekday() is 0=Monday … 6=Sunday
-                start_dt = datetime.combine(current.date(), start_time)
-                end_dt = datetime.combine(current.date(), end_time)
-                # Reuse single‐booking checks (except duration check if fixed 1h)
+        d = start_date
+        one_day = timedelta(days=1)
+        while d <= end_date:
+            if str(d.weekday()) in weekdays:
+                start_dt = datetime.combine(d, start_time)
+                end_dt   = datetime.combine(d, end_time)
                 slots.append((start_dt, end_dt))
-            current += delta_day
+            d += one_day
 
         if not slots:
             return False, "No valid weekday slots in the given date range."
 
-        # 2. Begin a nested transaction—roll back entire series on first clash
+        # 2. SAME SANITY CHECKS AS SINGLE BOOKING
+        for start_dt, end_dt in slots:
+            # a) end after start?
+            if end_dt <= start_dt:
+                return False, "End time must be after start time."
+            duration = end_dt - start_dt
+            # b) max 8 h?
+            if duration > BookingService.MAX_DURATION:
+                return False, "Booking cannot exceed 8 hours."
+            # c) daily cap?
+            day = start_dt.date()
+            day_start = datetime.combine(day, datetime.min.time())
+            day_end   = datetime.combine(day, datetime.max.time())
+            existing = Booking.query.filter(
+                Booking.environment_id == environment.id,
+                Booking.start >= day_start, Booking.start <= day_end
+            ).all()
+            total_sec = sum((b.end - b.start).total_seconds() for b in existing)
+            total_sec += duration.total_seconds()
+            cap_sec = 24*3600 * BookingService.DAILY_UTILIZATION_CAP
+            if total_sec > cap_sec:
+                return False, "Cannot book: daily utilization cap (90 %) reached."
+
+        # 3. Now the transactional overlap & insert
         session = db.session
         try:
-            # Use SAVEPOINT for nested transaction
             with session.begin_nested():
                 count = 0
-                for (start_dt, end_dt) in slots:
-                    # Overlap check
-                    overlap = (
-                        Booking.query
-                        .filter(Booking.environment_id == environment.id)
-                        .filter(Booking.end > start_dt, Booking.start < end_dt)
-                        .first()
-                    )
+                for start_dt, end_dt in slots:
+                    overlap = Booking.query.filter(
+                        Booking.environment_id == environment.id,
+                        Booking.end > start_dt,
+                        Booking.start < end_dt
+                    ).first()
                     if overlap:
                         clash_str = start_dt.strftime("%Y-%m-%d %H:%M")
                         raise ValueError(f"Series failed: clash on {clash_str}.")
-                    # Insert child booking
-                    child = Booking(
+                    session.add(Booking(
                         environment_id=environment.id,
                         user_id=user.id,
                         start=start_dt,
                         end=end_dt
-                    )
-                    session.add(child)
+                    ))
                     count += 1
-            # If we reach here, no overlap was found → commit at outer level
+
             session.commit()
             return True, count
+
         except ValueError as ve:
-            # Roll back to the savepoint, then outer transaction is still active
             session.rollback()
             return False, str(ve)
-        except Exception as e:
+        except Exception:
             session.rollback()
             return False, "Series failed: unexpected error."
 
