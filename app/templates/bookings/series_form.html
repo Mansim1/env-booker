@@ -1,67 +1,110 @@
+{# app/templates/bookings/series_form.html #}
 {% extends "base.html" %}
 {% block content %}
   <div class="container mt-4">
     <h2>New Series Booking</h2>
 
-    <form method="post">
+    {# If there was a clash, display the relevant alert(s) #}
+    {% if clash %}
+      {% if suggestion %}
+        <div class="alert alert-info">
+          Series failed due to clash. Suggested series:<br>
+          <strong>{{ weekdays_str }}</strong>
+          from {{ form.start_dt.data.date().isoformat() }}
+          {{ sug_start_time }}–{{ sug_end_time }}.
+          {# “Accept Suggestion” link: #}
+          <a
+            href="{{ url_for(
+              'bookings.accept_series_suggestion',
+              env_id=form.environment.data,
+              start_date=form.start_dt.data.date().isoformat(),
+              end_date=form.end_dt.data.date().isoformat(),
+              weekdays=','.join(form.days_of_week.data or []),
+              start_time=sug_start_time,
+              end_time=sug_end_time
+            ) }}"
+            class="alert-link"
+          >
+            [Accept Suggestion]
+          </a>
+        </div>
+      {% else %}
+        <div class="alert alert-danger">
+          No alternative series available within ±3 hours.
+        </div>
+      {% endif %}
+
+      {# If an Admin is logged in, show a Force Series button #}
+      {% if current_user.role == "admin" %}
+        <form method="post"
+              action="{{ url_for('bookings.create_series_booking', force='true') }}">
+          {# Hidden fields to re‐submit the exact same values: #}
+          <input type="hidden" name="environment" value="{{ form.environment.data }}">
+          <input type="hidden" name="start_dt" value="{{ orig_start_dt }}">
+          <input type="hidden" name="end_dt"   value="{{ orig_end_dt }}">
+          {# days_of_week is a list of selected weekday indices #}
+          {% for d in form.days_of_week.data or [] %}
+            <input type="hidden" name="days_of_week" value="{{ d }}">
+          {% endfor %}
+          <button type="submit" class="btn btn-warning mb-3">
+            Force Series
+          </button>
+        </form>
+      {% endif %}
+    {% endif %}
+
+    <form method="post" novalidate>
       {{ form.hidden_tag() }}
 
-      <!-- Environment dropdown -->
       <div class="mb-3">
         {{ form.environment.label(class="form-label") }}
         {{ form.environment(class="form-select") }}
-        {% for error in form.environment.errors %}
-          <div class="text-danger">{{ error }}</div>
+        {% for e in form.environment.errors %}
+          <div class="text-danger">{{ e }}</div>
         {% endfor %}
       </div>
 
-      <!-- Combined Start and End datetime -->
       <div class="row">
         <div class="col-md-6 mb-3">
           {{ form.start_dt.label(class="form-label") }}
-          {{ form.start_dt(class="form-control") }}
-          {% for error in form.start_dt.errors %}
-            <div class="text-danger">{{ error }}</div>
+          {{ form.start_dt(class="form-control", type="datetime-local") }}
+          {% for e in form.start_dt.errors %}
+            <div class="text-danger">{{ e }}</div>
           {% endfor %}
         </div>
         <div class="col-md-6 mb-3">
           {{ form.end_dt.label(class="form-label") }}
-          {{ form.end_dt(class="form-control") }}
-          {% for error in form.end_dt.errors %}
-            <div class="text-danger">{{ error }}</div>
+          {{ form.end_dt(class="form-control", type="datetime-local") }}
+          {% for e in form.end_dt.errors %}
+            <div class="text-danger">{{ e }}</div>
           {% endfor %}
         </div>
       </div>
 
-      <!-- Days of Week checkboxes -->
       <div class="mb-3">
-        <label class="form-label">{{ form.days_of_week.label.text }}</label>
-        <div>
-          {% set selected_days = form.days_of_week.data or [] %}
-          {% for val, label in form.days_of_week.choices %}
-            <div class="form-check form-check-inline">
-              <input
-                class="form-check-input"
-                type="checkbox"
-                name="{{ form.days_of_week.name }}"
-                id="dow-{{ val }}"
-                value="{{ val }}"
-                {% if val in selected_days %}checked{% endif %}
-              >
-              <label class="form-check-label" for="dow-{{ val }}">{{ label }}</label>
-            </div>
-          {% endfor %}
-        </div>
-        {% for error in form.days_of_week.errors %}
-          <div class="text-danger mt-1">{{ error }}</div>
+        {{ form.days_of_week.label(class="form-label") }}
+        {% for value, label in form.days_of_week.choices %}
+          <div class="form-check form-check-inline">
+            <input
+              class="form-check-input"
+              type="checkbox"
+              id="dow-{{ value }}"
+              name="days_of_week"
+              value="{{ value }}"
+              {% if value in (form.days_of_week.data or []) %} checked{% endif %}
+            >
+            <label class="form-check-label" for="dow-{{ value }}">
+              {{ label }}
+            </label>
+          </div>
+        {% endfor %}
+        {% for e in form.days_of_week.errors %}
+          <div class="text-danger">{{ e }}</div>
         {% endfor %}
       </div>
 
-      <!-- Submit / Cancel buttons -->
-      <div class="mt-4">
-        {{ form.submit(class="btn btn-primary") }}
-        <a href="{{ url_for('bookings.list_bookings') }}" class="btn btn-secondary ms-2">Cancel</a>
-      </div>
+      <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+      <a href="{{ url_for('bookings.list_bookings') }}" class="btn btn-secondary">Cancel</a>
     </form>
   </div>
 {% endblock %}
