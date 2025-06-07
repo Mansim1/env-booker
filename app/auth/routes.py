@@ -29,7 +29,7 @@ def login():
         if user:
             login_user(user)
             flash(f"Welcome, {user.email}", "success")
-            return redirect(url_for("main.index"))
+            return redirect(url_for("main.dashboard"))
         flash("Invalid email or password.", "danger")
     return render_template("auth/login.html", form=form)
 
