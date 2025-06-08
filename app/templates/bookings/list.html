@@ -3,9 +3,14 @@
   <div class="container mt-4">
     <h2>Bookings</h2>
 
-    <a href="{{ url_for('bookings.create_booking') }}" class="btn btn-primary mb-3">
-      New Booking
-    </a>
+    <div class="mb-3">
+      <a href="{{ url_for('bookings.create_booking') }}" class="btn btn-primary me-2">
+        New Booking
+      </a>
+      <a href="{{ url_for('bookings.create_series_booking') }}" class="btn btn-secondary">
+        New Series Booking
+      </a>
+    </div>
 
     {% if bookings %}
       <table class="table table-striped">
@@ -22,22 +27,22 @@
         </thead>
         <tbody>
           {% for b in bookings %}
-          <tr>
-            <td>{{ b.environment.name }}</td>
-            <td>{{ b.start.strftime("%Y-%m-%d %H:%M") }}</td>
-            <td>{{ b.end.strftime("%Y-%m-%d %H:%M") }}</td>
-            {% if current_user.role == "admin" %}
-              <td>{{ b.user.email }}</td>
-            {% endif %}
-            <td>
-              <a
-                href="{{ url_for('bookings.download_ics', booking_id=b.id) }}"
-                class="btn btn-sm btn-outline-secondary"
-              >
-                Download .ics
-              </a>
-            </td>
-          </tr>
+            <tr>
+              <td>{{ b.environment.name }}</td>
+              <td>{{ b.start.strftime("%Y-%m-%d %H:%M") }}</td>
+              <td>{{ b.end.strftime("%Y-%m-%d %H:%M") }}</td>
+              {% if current_user.role == "admin" %}
+                <td>{{ b.user.email }}</td>
+              {% endif %}
+              <td>
+                <a
+                  href="{{ url_for('bookings.download_ics', booking_id=b.id) }}"
+                  class="btn btn-sm btn-outline-secondary"
+                >
+                  Download .ics
+                </a>
+              </td>
+            </tr>
           {% endfor %}
         </tbody>
       </table>

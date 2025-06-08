@@ -1,23 +1,68 @@
+{# app/templates/bookings/form.html #}
 {% extends "base.html" %}
 {% block content %}
-  <h2>New Booking</h2>
-  <form method="post">
-    {{ form.hidden_tag() }}
-    <div class="mb-3">
-      {{ form.environment.label(class="form-label") }}
-      {{ form.environment(class="form-select") }}
-      {% for e in form.environment.errors %}<div class="text-danger">{{ e }}</div>{% endfor %}
-    </div>
-    <div class="mb-3">
+  <div class="container mt-4">
+    <h2>New Booking</h2>
+
+    {# ── CLASH + ADMIN ── #}
+    {% if clash and can_force %}
+      <form
+        method="post"
+        action="{{ url_for('bookings.create_booking', force='true') }}"
+      >
+        {{ form.hidden_tag() }}
+        {# re-submit environment, start, end in the format the field expects #}
+        <input
+          type="hidden"
+          name="{{ form.environment.name }}"
+          value="{{ form.environment.data }}"
+        >
+        <input
+          type="hidden"
+          name="{{ form.start.name }}"
+          value="{{ orig_start }}"
+        >
+        <input
+          type="hidden"
+          name="{{ form.end.name }}"
+          value="{{ orig_end }}"
+        >
+        <button type="submit" class="btn btn-warning mb-3">
+          Force Book
+        </button>
+      </form>
+    {% endif %}
+
+    {# ── NORMAL FORM ── #}
+    <form method="post" novalidate>
+      {{ form.hidden_tag() }}
+
+      <div class="mb-3">
+        {{ form.environment.label(class="form-label") }}
+        {{ form.environment(class="form-select") }}
+        {% for e in form.environment.errors %}
+          <div class="text-danger">{{ e }}</div>
+        {% endfor %}
+      </div>
+
+      <div class="mb-3">
         {{ form.start.label(class="form-label") }}
         {{ form.start(class="form-control") }}
-        {% for e in form.start.errors %}<div class="text-danger">{{ e }}</div>{% endfor %}
+        {% for e in form.start.errors %}
+          <div class="text-danger">{{ e }}</div>
+        {% endfor %}
       </div>
+
       <div class="mb-3">
         {{ form.end.label(class="form-label") }}
         {{ form.end(class="form-control") }}
-        {% for e in form.end.errors %}<div class="text-danger">{{ e }}</div>{% endfor %}
-      </div>      
-    {{ form.submit(class="btn btn-primary") }}
-  </form>
+        {% for e in form.end.errors %}
+          <div class="text-danger">{{ e }}</div>
+        {% endfor %}
+      </div>
+
+      <button type="submit" class="btn btn-primary">Book</button>
+      <a href="{{ url_for('bookings.list_bookings') }}" class="btn btn-secondary">Cancel</a>
+    </form>
+  </div>
 {% endblock %}

@@ -1,11 +1,72 @@
 {% extends "base.html" %}
 {% block content %}
   <div class="container mt-4">
-    <h1>Welcome, {{ user.email }}!</h1>
-    <p>You are logged in as <strong>{{ user.role }}</strong>.</p>
+    {# flash messages will render here, including your green banner #}
 
-    <ul>
-      <li><a href="{{ url_for('auth.logout') }}">Log out</a></li>
-    </ul>
+    <div class="row mb-4">
+      <div class="col-md-4">
+        <a href="{{ url_for('bookings.create_booking') }}"
+           class="btn btn-primary w-100 mb-2">
+          New Booking
+        </a>
+      </div>
+      <div class="col-md-4">
+        <a href="{{ url_for('bookings.list_bookings') }}"
+           class="btn btn-secondary w-100 mb-2">
+          My Bookings
+        </a>
+      </div>
+      {% if user.role == "admin" %}
+      <div class="col-md-4">
+        <a href="{{ url_for('environment.list_environments') }}"
+           class="btn btn-warning w-100 mb-2">
+          Manage Environments
+        </a>
+      </div>
+      {% endif %}
+    </div>
+
+    <h3>Upcoming Bookings</h3>
+    {% if upcoming %}
+      <table class="table table-hover mt-2">
+        <thead>
+          <tr>
+            <th>Environment</th>
+            <th>Start</th>
+            <th>End</th>
+            {% if user.role == "admin" %}
+            <th>User</th>
+            {% endif %}
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for b in upcoming %}
+          <tr>
+            <td>{{ b.environment.name }}</td>
+            <td>{{ b.start.strftime("%Y-%m-%d %H:%M") }}</td>
+            <td>{{ b.end.strftime("%Y-%m-%d %H:%M") }}</td>
+            {% if user.role == "admin" %}
+            <td>{{ b.user.email }}</td>
+            {% endif %}
+            <td>
+              <a href="{{ url_for('bookings.download_ics', booking_id=b.id) }}"
+                 class="btn btn-sm btn-outline-info">
+                Download .ics
+              </a>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% if upcoming|length == 5 %}
+        <p class="text-muted">Showing next 5 <a href="{{ url_for('bookings.list_bookings') }}">see all</a>.</p>
+      {% endif %}
+    {% else %}
+      <p class="text-muted">No upcoming bookings.</p>
+    {% endif %}
+
+    <hr>
+    <p><a href="{{ url_for('auth.logout') }}" class="btn btn-link">Log out</a></p>
   </div>
 {% endblock %}
