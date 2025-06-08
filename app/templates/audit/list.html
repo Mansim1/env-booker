@@ -20,9 +20,7 @@
         <td>{{ entry.timestamp.strftime("%Y-%m-%d %H:%M:%S") }}</td>
         <td>{{ entry.actor.email }}</td>
         <td>
-          <a href="{{ url_for('bookings.view_booking', booking_id=entry.booking_id) }}">
             {{ entry.booking_id }}
-          </a>
         </td>
         <td>
           {% if entry.action == "forced_single_book" %}
