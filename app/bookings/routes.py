@@ -1,7 +1,7 @@
 # app/bookings/routes.py
 
 from flask import (
-    Blueprint, render_template, redirect, url_for, flash, abort, request, Response
+    Blueprint, render_template, redirect, url_for, flash, abort, request
 )
 from flask_login import login_required, current_user
 from markupsafe import Markup
@@ -27,27 +27,50 @@ def list_bookings():
 @login_required
 def create_booking():
     form = BookingForm()
-    if form.validate_on_submit():
-        env = db.session.get(Environment, form.environment.data) or abort(404)
+    force_flag = (request.args.get("force") == "true")
+    is_admin   = (current_user.role == "admin")
 
+    if form.validate_on_submit():
+        env   = db.session.get(Environment, form.environment.data) or abort(404)
+        start = form.start.data
+        end   = form.end.data
+
+        # Pass both accept_suggestion *and* force into the service:
         ok, result = BookingService.attempt_single_booking(
             user=current_user,
             environment=env,
-            start=form.start.data,
-            end=form.end.data,
+            start=start,
+            end=end,
+            accept_suggestion=False,
+            force=force_flag
         )
 
         if not ok:
-            # if clash: maybe suggestion
             if result == "clash":
-                msg = BookingService.single_suggestion_flash(env, form.start.data, form.end.data)
-                flash(Markup(msg), "info")
+                flash(Markup(BookingService.single_suggestion_flash(env, start, end)), "info")
             else:
                 flash(result, "danger")
+
+            if is_admin and not force_flag and result == "clash":
+                orig_start = start.strftime("%Y-%m-%dT%H:%M")
+                orig_end   = end.strftime(  "%Y-%m-%dT%H:%M")
+                return render_template(
+                    "bookings/form.html",
+                    form=form,
+                    clash=True,
+                    can_force=True,
+                    orig_start=orig_start,
+                    orig_end=orig_end
+                )
+
             return redirect(url_for("bookings.create_booking"))
 
-        booking = result
-        flash(f"Booking confirmed: {booking.summary}", "success")
+        b = result
+        flash(
+            f"Booking confirmed: {b.environment.name} from "
+            f"{b.start.strftime('%Y-%m-%d %H:%M')} to {b.end.strftime('%Y-%m-%d %H:%M')}.",
+            "success"
+        )
         return redirect(url_for("bookings.list_bookings"))
 
     return render_template("bookings/form.html", form=form)
@@ -56,9 +79,9 @@ def create_booking():
 @bookings_bp.route("/accept_suggestion")
 @login_required
 def accept_suggestion():
-    env_id = request.args.get("env_id", type=int)
+    env_id    = request.args.get("env_id", type=int)
     start_str = request.args.get("start")
-    end_str = request.args.get("end")
+    end_str   = request.args.get("end")
     env = db.session.get(Environment, env_id) or abort(404)
 
     try:
@@ -67,7 +90,7 @@ def accept_suggestion():
     except ValueError:
         abort(400)
 
-    ok, result = BookingService.attempt_single_booking(
+    ok, res = BookingService.attempt_single_booking(
         user=current_user,
         environment=env,
         start=start,
@@ -78,7 +101,8 @@ def accept_suggestion():
         flash("Could not create suggested booking", "danger")
         return redirect(url_for("bookings.create_booking"))
 
-    flash(f"Booking confirmed: {result.summary}", "success")
+    b = res
+    flash(f"Booking confirmed: {b.environment.name} from {b.start.strftime('%Y-%m-%d %H:%M')} to {b.end.strftime('%Y-%m-%d %H:%M')}.", "success")
     return redirect(url_for("bookings.list_bookings"))
 
 
@@ -86,31 +110,28 @@ def accept_suggestion():
 @login_required
 def create_series_booking():
     form = SeriesBookingForm()
-    force = request.args.get("force") == "true"
+    force = (request.args.get("force") == "true")
 
     if form.validate_on_submit():
         env = db.session.get(Environment, form.environment.data) or abort(404)
 
-        ok, result = BookingService.attempt_series_booking(
+        ok, res = BookingService.attempt_series_booking(
             user=current_user,
             environment=env,
             start_dt=form.start_dt.data,
             end_dt=form.end_dt.data,
             weekdays=form.days_of_week.data,
-            force=force,
+            force=force
         )
 
         if not ok:
-            if result == "clash":
-                # render form with suggestion context
-                context = BookingService.series_suggestion_context(
-                    form, env, form.start_dt.data, form.end_dt.data
-                )
-                return render_template("bookings/series_form.html", **context)
-            flash(result, "danger")
+            if res == "clash":
+                ctx = BookingService.series_suggestion_context(form, env, form.start_dt.data, form.end_dt.data)
+                return render_template("bookings/series_form.html", **ctx)
+            flash(res, "danger")
             return redirect(url_for("bookings.create_series_booking"))
 
-        count, forced = result
+        count, forced = res
         verb = " (forced)" if forced else ""
         flash(f"Series booking{verb} confirmed: {count} slots for {env.name}.", "success")
         return redirect(url_for("bookings.list_bookings"))
@@ -122,12 +143,11 @@ def create_series_booking():
 @login_required
 def accept_series_suggestion():
     params = request.args.to_dict()
-    ok, result = BookingService.accept_series_suggestion(current_user, **params)
+    ok, res = BookingService.accept_series_suggestion(current_user, **params)
     if not ok:
         flash("Could not create suggested series booking.", "danger")
         return redirect(url_for("bookings.create_series_booking"))
-
-    count = result
+    count = res
     flash(f"Series booking confirmed: {count} slots for {params['env_name']}.", "success")
     return redirect(url_for("bookings.list_bookings"))
 
@@ -138,5 +158,4 @@ def download_ics(booking_id):
     booking = db.session.get(Booking, booking_id) or abort(404)
     if current_user.role != "admin" and booking.user_id != current_user.id:
         abort(403)
-    response = BookingService.generate_ics_response(booking)
-    return response
+    return BookingService.generate_ics_response(booking)
