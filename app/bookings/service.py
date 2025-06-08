@@ -1,6 +1,6 @@
 # app/bookings/service.py
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from flask import Response, url_for
 from sqlalchemy import func
 from markupsafe import escape
@@ -277,7 +277,7 @@ class BookingService:
 
     @classmethod
     def generate_ics_response(cls, booking):
-        now_utc = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+        now_utc = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         lines = [
             "BEGIN:VCALENDAR", "VERSION:2.0",
             "PRODID:-//EasyEnvBooker//EN",
