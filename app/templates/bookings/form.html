@@ -1,4 +1,3 @@
-{# app/templates/bookings/form.html #}
 {% extends "base.html" %}
 {% block content %}
   <div class="container mt-4">
@@ -11,25 +10,10 @@
         action="{{ url_for('bookings.create_booking', force='true') }}"
       >
         {{ form.hidden_tag() }}
-        {# re-submit environment, start, end in the format the field expects #}
-        <input
-          type="hidden"
-          name="{{ form.environment.name }}"
-          value="{{ form.environment.data }}"
-        >
-        <input
-          type="hidden"
-          name="{{ form.start.name }}"
-          value="{{ orig_start }}"
-        >
-        <input
-          type="hidden"
-          name="{{ form.end.name }}"
-          value="{{ orig_end }}"
-        >
-        <button type="submit" class="btn btn-warning mb-3">
-          Force Book
-        </button>
+        <input type="hidden" name="{{ form.environment.name }}" value="{{ form.environment.data }}">
+        <input type="hidden" name="{{ form.start.name }}" value="{{ orig_start }}">
+        <input type="hidden" name="{{ form.end.name }}" value="{{ orig_end }}">
+        <button type="submit" class="btn btn-warning mb-3">Force Book</button>
       </form>
     {% endif %}
 
@@ -47,7 +31,7 @@
 
       <div class="mb-3">
         {{ form.start.label(class="form-label") }}
-        {{ form.start(class="form-control") }}
+        {{ form.start(class="form-control", min=min_date) }}
         {% for e in form.start.errors %}
           <div class="text-danger">{{ e }}</div>
         {% endfor %}
@@ -55,7 +39,7 @@
 
       <div class="mb-3">
         {{ form.end.label(class="form-label") }}
-        {{ form.end(class="form-control") }}
+        {{ form.end(class="form-control", min=min_date) }}
         {% for e in form.end.errors %}
           <div class="text-danger">{{ e }}</div>
         {% endfor %}
@@ -64,5 +48,10 @@
       <button type="submit" class="btn btn-primary">Book</button>
       <a href="{{ url_for('bookings.list_bookings') }}" class="btn btn-secondary">Cancel</a>
     </form>
+
+    <p class="mt-4 text-muted">
+      Want to book recurring slots instead?
+      <a href="{{ url_for('bookings.create_series_booking') }}" class="btn btn-outline-secondary btn-sm ms-2">Book Series</a>
+    </p>
   </div>
 {% endblock %}

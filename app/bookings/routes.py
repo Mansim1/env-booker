@@ -36,10 +36,19 @@ def create_booking():
     force_flag = (request.args.get("force") == "true")
     is_admin   = (current_user.role == "admin")
 
+    if request.method == "GET":
+        logger.debug("Rendering booking form for user: %s", current_user.email)
+
     if form.validate_on_submit():
         env   = db.session.get(Environment, form.environment.data) or abort(404)
         start = form.start.data
         end   = form.end.data
+
+        # Prevent bookings in the past
+        if start < datetime.now():
+            flash("Cannot book a time in the past.", "danger")
+            return render_template("bookings/form.html", form=form)
+
         logger.info("Booking attempt by %s: %s from %s to %s", current_user.email, env.name, start, end)
 
         # Attempt to create the booking with clash and force handling
@@ -54,7 +63,7 @@ def create_booking():
 
         # Handle booking failures and display suggestions or errors
         if not ok:
-            logger.warning("Booking failed for user %s: %s", current_user.email, result)
+            logger.warning("Booking failed for user %s on env %s: %s", current_user.email, env.name, result)
             if result == "clash":
                 flash(Markup(BookingService.single_suggestion_flash(env, start, end)), "info")
             else:
@@ -73,7 +82,7 @@ def create_booking():
                     orig_end=orig_end
                 )
 
-            return redirect(url_for("bookings.create_booking"))
+            return render_template("bookings/form.html", form=form)
 
         # Booking successful
         b = result
@@ -97,6 +106,10 @@ def accept_suggestion():
     start_str = request.args.get("start")
     end_str   = request.args.get("end")
     logger.debug("Suggestion accepted by %s for env_id=%s", current_user.email, env_id)
+
+    if not start_str or not end_str:
+        logger.error("Missing query params for suggestion: start=%s, end=%s", start_str, end_str)
+        abort(400)
 
     env = db.session.get(Environment, env_id) or abort(404)
 
@@ -132,11 +145,19 @@ def create_series_booking():
     form = SeriesBookingForm()
     force = (request.args.get("force") == "true")
 
+    if request.method == "GET":
+        logger.debug("Rendering series booking form for user: %s", current_user.email)
+
     if form.validate_on_submit():
         env = db.session.get(Environment, form.environment.data) or abort(404)
+
+        # Prevent bookings in the past
+        if form.start_dt.data < datetime.now():
+            flash("Cannot book a time in the past.", "danger")
+            return render_template("bookings/series_form.html", form=form)
+
         logger.info("Series booking attempt by %s for %s (%s to %s)", current_user.email, env.name, form.start_dt.data, form.end_dt.data)
 
-        # Try to make the series booking (force bypasses clash checking)
         ok, res = BookingService.attempt_series_booking(
             user=current_user,
             environment=env,
@@ -149,11 +170,10 @@ def create_series_booking():
         if not ok:
             logger.warning("Series booking failed for user %s: %s", current_user.email, res)
             if res == "clash":
-                # Suggest alternative slots
                 ctx = BookingService.series_suggestion_context(form, env, form.start_dt.data, form.end_dt.data)
                 return render_template("bookings/series_form.html", **ctx)
             flash(res, "danger")
-            return redirect(url_for("bookings.create_series_booking"))
+            return render_template("bookings/series_form.html", form=form)
 
         count, forced = res
         logger.info("Series booking successful: %d slots booked for %s by %s (forced=%s)", count, env.name, current_user.email, forced)
@@ -185,7 +205,11 @@ def accept_series_suggestion():
 @login_required
 def download_ics(booking_id):
     """Download .ics calendar file for the booking"""
-    booking = db.session.get(Booking, booking_id) or abort(404)
+    booking = db.session.get(Booking, booking_id)
+
+    if not booking:
+        logger.error("Booking not found for ID: %s", booking_id)
+        abort(404)
 
     # Only allow download for booking owner or admin
     if current_user.role != "admin" and booking.user_id != current_user.id:

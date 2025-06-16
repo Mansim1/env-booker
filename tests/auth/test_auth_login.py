@@ -1,8 +1,4 @@
-from app.models import User
-
-# Helper function to simulate login
-def post_login(client, email, pw):
-    return client.post("/auth/login", data={"email": email, "password": pw}, follow_redirects=True)
+from tests.utils import post_login
 
 # Test a successful login with correct credentials
 def test_successful_login(client):
