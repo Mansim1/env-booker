@@ -10,7 +10,7 @@ class AuthService:
             return False, "That email is already registered, please log in."
         user = User(email=email)
         user.set_password(password)
-        user.role = "admin"
+        # user.role = "admin"
         db.session.add(user)
         db.session.commit()
         return True, None

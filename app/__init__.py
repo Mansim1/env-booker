@@ -42,7 +42,6 @@ def create_app(config_name=None):
     from app.environment.routes import env_bp
     from app.bookings.routes import bookings_bp
     from app.audit.routes import audit_bp
-    # (future: bookings_bp, admin_bp, etc.)
 
     app.register_blueprint(main_bp)
     app.register_blueprint(auth_bp)
