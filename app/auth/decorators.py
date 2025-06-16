@@ -3,6 +3,7 @@ from flask import abort
 from flask_login import current_user
 
 def admin_required(f):
+    """Restricts route access to admin users only"""
     @wraps(f)
     def decorated(*args, **kwargs):
         if current_user.role != "admin":

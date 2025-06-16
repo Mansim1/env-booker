@@ -1,6 +1,7 @@
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
+import logging
 
 db = SQLAlchemy()
 login = LoginManager()
@@ -11,6 +12,11 @@ config_map = {
     "testing":     "config.TestingConfig",
     "production":  "config.ProductionConfig",
 }
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
 
 def create_app(config_name=None):
     app = Flask(__name__, instance_relative_config=False)
