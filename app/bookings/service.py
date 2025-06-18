@@ -1,15 +1,15 @@
-from datetime import datetime, timedelta, timezone
+import json
+import logging
+from datetime import datetime, timedelta, timezone, time
 from flask import Response, url_for
 from sqlalchemy import func
 from markupsafe import escape
 from app import db
 from app.models import Booking, AuditLog
-import logging
 
 logger = logging.getLogger(__name__)
 
 class BookingService:
-    # Configuration constants for booking validation
     MAX_DURATION = timedelta(hours=8)
     DAILY_UTILIZATION_CAP = 0.90
     SUGGESTION_WINDOW = timedelta(hours=3)
@@ -17,90 +17,83 @@ class BookingService:
 
     @staticmethod
     def _overlap_exists(env_id, start, end, exclude_id=None):
-        """
-        Check if any existing booking overlaps with the proposed time range.
-        Optionally exclude a booking ID (useful when editing).
-        """
         q = db.session.query(Booking.id).filter(
             Booking.environment_id == env_id,
             Booking.end > start,
             Booking.start < end
         )
-
         if exclude_id:
             q = q.filter(Booking.id != exclude_id)
-
-        overlap = q.first() is not None
-        logger.debug("Overlap check for env_id=%s, start=%s, end=%s, exclude_id=%s: %s",
-                    env_id, start, end, exclude_id, overlap)
-        return overlap
+        exists = db.session.query(q.exists()).scalar()
+        logger.debug("Overlap check: env=%s start=%s end=%s excl=%s → %s",
+                     env_id, start, end, exclude_id, exists)
+        return exists
 
     @staticmethod
     def _daily_util_seconds(env_id, day, exclude_id=None):
-        """
-        Calculate how many seconds of bookings already exist on a specific day
-        for the given environment. Optionally exclude one booking (e.g., during editing).
-        """
-        day_start = datetime.combine(day, datetime.min.time())
-        day_end   = datetime.combine(day, datetime.max.time())
+        day_start = datetime.combine(day, time.min)
+        day_end   = datetime.combine(day, time.max)
 
         q = db.session.query(
             func.coalesce(
                 func.sum(
-                    func.strftime('%s', Booking.end) - func.strftime('%s', Booking.start)
+                    func.strftime('%s', func.min(Booking.end, day_end))
+                    - func.strftime('%s', func.max(Booking.start, day_start))
                 ),
                 0
             )
         ).filter(
             Booking.environment_id == env_id,
-            Booking.start >= day_start,
-            Booking.start <= day_end
+            Booking.end > day_start,
+            Booking.start < day_end
         )
-
         if exclude_id:
             q = q.filter(Booking.id != exclude_id)
 
-        seconds = q.scalar()
-        logger.debug("Daily utilization for env_id=%s on %s (excluding ID %s): %s seconds",
-                    env_id, day, exclude_id, seconds)
-        return seconds or 0
+        secs = q.scalar() or 0
+        logger.debug("Daily util for env=%s on %s excl=%s → %s sec",
+                     env_id, day, exclude_id, secs)
+        return secs
+
+    @staticmethod
+    def log_action(action, actor_id, booking_id=None, details=None, commit=True):
+        if isinstance(details, dict):
+            details = json.dumps(details, default=str)
+        entry = AuditLog(
+            action=action,
+            actor_id=actor_id,
+            booking_id=booking_id,
+            details=details
+        )
+        db.session.add(entry)
+        if commit:
+            db.session.commit()
+        logger.debug("AuditLog: action=%s actor=%s booking=%s details=%s",
+                     action, actor_id, booking_id, details)
 
     @classmethod
     def _validate_single(cls, env_id, start, end, exclude_id=None):
-        """
-        Enforce all validation rules on a single booking slot:
-        - End after start
-        - Duration within limit
-        - Daily capacity not exceeded
-        - No time overlaps (excluding given booking ID if editing)
-        """
-        logger.debug("Validating booking for env_id=%s from %s to %s (exclude_id=%s)", env_id, start, end, exclude_id)
-
+        logger.debug("Validating: env=%s start=%s end=%s excl=%s",
+                     env_id, start, end, exclude_id)
         if end <= start:
             return False, "End time must be after start time."
-
-        dur = end - start
-        if dur > cls.MAX_DURATION:
+        duration = end - start
+        if duration > cls.MAX_DURATION:
             return False, "Booking cannot exceed 8 hours."
-
-        used = cls._daily_util_seconds(env_id, start.date(), exclude_id=exclude_id)
-        if used + dur.total_seconds() > 24 * 3600 * cls.DAILY_UTILIZATION_CAP:
-            return False, "Cannot book: daily utilization cap (90 %) reached."
-
-        if cls._overlap_exists(env_id, start, end, exclude_id=exclude_id):
+        used = cls._daily_util_seconds(env_id, start.date(), exclude_id)
+        if used + duration.total_seconds() > 24*3600*cls.DAILY_UTILIZATION_CAP:
+            return False, "Cannot book: daily utilization cap (90%) reached."
+        if cls._overlap_exists(env_id, start, end, exclude_id):
             return False, "This slot is already booked."
-
         return True, None
 
     @classmethod
     def create_booking(cls, user, environment, start, end):
-        """
-        Create a single validated booking and commit it to the database.
-        """
         ok, err = cls._validate_single(environment.id, start, end)
         if not ok:
-            logger.warning("Booking validation failed for user_id=%s: %s", user.id, err)
+            logger.warning("Booking validation failed for user %s: %s", user.id, err)
             return False, err
+
         b = Booking(
             environment_id=environment.id,
             user_id=user.id,
@@ -108,15 +101,21 @@ class BookingService:
             end=end
         )
         db.session.add(b)
+        db.session.flush()
+        details = {
+            "env_id": environment.id,
+            "env_name": environment.name,
+            "start": start.isoformat(),
+            "end": end.isoformat()
+        }
+        cls.log_action("create_booking", user.id, b.id, details=details, commit=False)
         db.session.commit()
-        logger.info("Booking created successfully for user_id=%s: env_id=%s, start=%s, end=%s", user.id, environment.id, start, end)
+
+        logger.info("Booking %s created for user %s", b.id, user.id)
         return True, b
 
     @classmethod
     def _build_slots(cls, start_dt, end_dt, weekdays):
-        """
-        Generate a list of (start, end) datetime tuples for recurring bookings.
-        """
         slots = []
         current = start_dt.date()
         one_day = timedelta(days=1)
@@ -126,79 +125,79 @@ class BookingService:
                 e = datetime.combine(current, end_dt.time())
                 slots.append((s, e))
             current += one_day
-        logger.debug("Built %d slots for series booking.", len(slots))
+        logger.debug("Built %d series slots", len(slots))
         return slots
 
     @classmethod
     def _bulk_insert_with_audit(cls, user, environment, slots, action):
-        """
-        Insert multiple bookings and create corresponding audit log entries.
-        """
-        count = 0
-        for s, e in slots:
+        for start, end in slots:
             b = Booking(
                 environment_id=environment.id,
                 user_id=user.id,
-                start=s,
-                end=e
+                start=start,
+                end=end
             )
             db.session.add(b)
             db.session.flush()
-            db.session.add(AuditLog(
-                action=action,
-                actor_id=user.id,
-                booking_id=b.id
-            ))
-            count += 1
-        logger.info("Inserted %d bookings with audit for user_id=%s.", count, user.id)
-        return count
+            details = {
+                "env_id": environment.id,
+                "env_name": environment.name,
+                "start": start.isoformat(),
+                "end": end.isoformat(),
+                "series_action": action
+            }
+            cls.log_action(action, user.id, b.id, details=details, commit=False)
+        logger.info("Bulk inserted %d bookings for user %s", len(slots), user.id)
+        return len(slots)
 
     @classmethod
     def create_series(cls, user, environment, start_date, end_date, weekdays, start_time, end_time):
-        # Create a list of time slots based on user input
         slots = cls._build_slots(
             datetime.combine(start_date, start_time),
             datetime.combine(end_date, end_time),
             weekdays
         )
         if not slots:
-            logger.info("No valid weekday slots in the given date range.")
             return False, "No valid weekday slots in the given date range."
 
-        # Pre-validate all slots to avoid booking conflicts
         for s, e in slots:
             ok, err = cls._validate_single(environment.id, s, e)
-            if not ok and err == "This slot is already booked.":
-                logger.warning(f"Series failed due to slot clash on {s}")
-                return False, f"Series failed: clash on {s.strftime('%Y-%m-%d %H:%M')}."
             if not ok:
-                logger.error(f"Validation failed for slot {s}-{e}: {err}")
-                return False, err
+                msg = f"Series failed on {s:%Y-%m-%d %H:%M}: {err}"
+                logger.warning(msg)
+                return False, msg
 
-        # Attempt transactional insert; rollback on error
         try:
-            with db.session.begin_nested():
-                for s, e in slots:
-                    if cls._overlap_exists(environment.id, s, e):
-                        logger.warning(f"Overlap detected during transactional insert on {s}")
-                        raise ValueError(f"Series failed: clash on {s.strftime('%Y-%m-%d %H:%M')}.")
-                    db.session.add(Booking(
-                        environment_id=environment.id,
-                        user_id=user.id,
-                        start=s,
-                        end=e
-                    ))
+            count = cls._bulk_insert_with_audit(user, environment, slots, "create_series")
             db.session.commit()
-            logger.info(f"Successfully created booking series with {len(slots)} slots.")
-            return True, len(slots)
-        except ValueError as ve:
+            logger.info("Created series of %d bookings for user %s", count, user.id)
+            return True, count
+        except Exception:
             db.session.rollback()
-            logger.error(f"ValueError during series creation: {ve}")
-            return False, str(ve)
-        except Exception as e:
-            db.session.rollback()
-            logger.exception("Unexpected error during series creation.")
+            logger.exception("Unexpected error during series creation")
             return False, "Series failed: unexpected error."
+
+    @classmethod
+    def attempt_series_booking(cls, user, environment, start_dt, end_dt, weekdays, force=False):
+        if force and getattr(user, "role", None) == "admin":
+            logger.info("Admin %s forcing series booking %s–%s", user.id, start_dt, end_dt)
+            slots = cls._build_slots(start_dt, end_dt, weekdays)
+            count = cls._bulk_insert_with_audit(user, environment, slots, "forced_series_book")
+            db.session.commit()
+            return True, (count, True)
+
+        ok, result = cls.create_series(
+            user, environment,
+            start_dt.date(), end_dt.date(),
+            weekdays, start_dt.time(), end_dt.time()
+        )
+        if not ok:
+            if result.startswith("Series failed on"):
+                return False, "clash"
+            return False, result
+
+        logger.info("Series booking succeeded for user %s", user.id)
+        return True, (result, False)
 
     @classmethod
     def find_suggestion(cls, environment, desired_start, desired_end):
@@ -208,78 +207,35 @@ class BookingService:
                 offset = cls.SUGGESTION_STEP * step_mul * sign
                 cs = desired_start + offset
                 ce = cs + duration
-                if desired_start - cls.SUGGESTION_WINDOW <= cs <= desired_start + cls.SUGGESTION_WINDOW:
-                    if not cls._overlap_exists(environment.id, cs, ce):
-                        logger.info(f"Suggestion found: {cs} to {ce}")
-                        return cs, ce
-        logger.info("No suggestion found within suggestion window.")
+                if (desired_start - cls.SUGGESTION_WINDOW <= cs <= desired_start + cls.SUGGESTION_WINDOW
+                    and not cls._overlap_exists(environment.id, cs, ce)):
+                    logger.info("Suggestion: %s to %s", cs, ce)
+                    return cs, ce
+        logger.info("No single suggestion found")
         return None, None
 
     @classmethod
     def find_series_suggestion(cls, environment, start_date, end_date, weekdays, start_time, end_time):
         base_start = datetime.combine(start_date, start_time)
         duration = datetime.combine(start_date, end_time) - base_start
-
         days = [
             start_date + timedelta(days=i)
             for i in range((end_date - start_date).days + 1)
             if str((start_date + timedelta(days=i)).weekday()) in weekdays
         ]
-
         for step_mul in range(1, int(cls.SUGGESTION_WINDOW / cls.SUGGESTION_STEP) + 1):
             for sign in (-1, +1):
                 offset = cls.SUGGESTION_STEP * step_mul * sign
-                clash = False
                 for d in days:
                     cs = datetime.combine(d, start_time) + offset
                     ce = cs + duration
                     if cls._overlap_exists(environment.id, cs, ce):
-                        clash = True
                         break
-                if not clash:
-                    logger.info(f"Series suggestion found with offset {offset}")
+                else:
+                    logger.info("Series suggestion offset %s", offset)
                     return (base_start + offset).time(), (base_start + offset + duration).time()
-        logger.info("No series suggestion found.")
+        logger.info("No series suggestion found")
         return None, None
-
-    @classmethod
-    def attempt_single_booking(cls, user, environment, start, end,
-                            accept_suggestion=False, force=False):
-        """
-        Try to create one booking.
-        Returns:
-        (True, booking) on success,
-        (False, "clash") if there's an overlap and suggestion not accepted,
-        (False, errmsg) for other validation failures.
-        """
-        if force and user.role == "admin":
-            logger.info(f"Admin {user.id} forcing booking from {start} to {end}")
-            b = Booking(environment_id=environment.id, user_id=user.id, start=start, end=end)
-            db.session.add(b)
-            db.session.flush()
-            db.session.add(AuditLog(action="forced_single_book", actor_id=user.id, booking_id=b.id))
-            db.session.commit()
-            return True, b
-
-        ok, err = cls._validate_single(environment.id, start, end)
-        if not ok:
-            if err == "This slot is already booked." and not accept_suggestion:
-                logger.info(f"Booking clash at {start} – no suggestion accepted.")
-                return False, "clash"
-            logger.warning(f"Booking validation failed: {err}")
-            return False, err
-
-        b = Booking(environment_id=environment.id, user_id=user.id, start=start, end=end)
-        db.session.add(b)
-        db.session.commit()
-
-        if accept_suggestion:
-            db.session.add(AuditLog(action="forced_single_book", actor_id=user.id, booking_id=b.id))
-            db.session.commit()
-            logger.info(f"Booking suggestion accepted by user {user.id}.")
-
-        logger.info(f"Booking successful from {start} to {end} by user {user.id}")
-        return True, b
 
     @classmethod
     def single_suggestion_flash(cls, environment, desired_start, desired_end):
@@ -289,51 +245,99 @@ class BookingService:
         start_str = s.strftime("%Y-%m-%d %H:%M")
         end_str = e.strftime("%Y-%m-%d %H:%M")
         link = url_for("bookings.accept_suggestion",
-                    env_id=environment.id,
-                    start=s.isoformat(),
-                    end=e.isoformat())
-        return f"Booking failed due to clash. Suggested slot: {start_str}–{end_str} <a href='{link}' class='alert-link'>[Accept]</a>"
+                       env_id=environment.id,
+                       start=s.isoformat(),
+                       end=e.isoformat())
+        return (f"Booking failed due to clash. Suggested slot: "
+                f"{start_str}–{end_str} <a href='{link}' class='alert-link'>[Accept]</a>")
 
     @classmethod
-    def attempt_series_booking(cls, user, environment, start_dt, end_dt, weekdays, force=False):
-        if force and user.role == "admin":
-            logger.info(f"Admin {user.id} forcing series booking from {start_dt} to {end_dt}")
-            slots = cls._build_slots(start_dt, end_dt, weekdays)
-            count = cls._bulk_insert_with_audit(user, environment, slots, "forced_series_book")
+    def attempt_single_booking(cls, user, environment, start, end,
+                               accept_suggestion=False, force=False):
+        if force and getattr(user, "role", None) == "admin":
+            b = Booking(environment_id=environment.id, user_id=user.id, start=start, end=end)
+            db.session.add(b)
+            db.session.flush()
+            details = {"forced": True, "start": start.isoformat(), "end": end.isoformat()}
+            cls.log_action("forced_single_book", user.id, b.id, details=details, commit=False)
             db.session.commit()
-            return True, (count, True)
+            return True, b
 
-        ok, msg = cls.create_series(user, environment, start_dt.date(), end_dt.date(), weekdays, start_dt.time(), end_dt.time())
+        ok, err = cls._validate_single(environment.id, start, end)
         if not ok:
-            if msg.startswith("Series failed: clash"):
-                logger.warning("Series booking failed due to clash.")
+            if err.startswith("This slot") and not accept_suggestion:
                 return False, "clash"
-            logger.error(f"Series booking failed: {msg}")
-            return False, msg
+            return False, err
 
-        logger.info("Series booking succeeded.")
-        return True, (msg, False)
+        b = Booking(environment_id=environment.id, user_id=user.id, start=start, end=end)
+        db.session.add(b)
+        db.session.flush()
+        action = "accept_suggestion" if accept_suggestion else "create_booking"
+        details = {
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "accepted_suggestion": accept_suggestion
+        }
+        cls.log_action(action, user.id, b.id, details=details, commit=False)
+        db.session.commit()
+        return True, b
+
+    @classmethod
+    def attempt_edit_booking(cls, booking, user, environment, start, end, force=False):
+        logger.debug("Editing booking %s by user %s", booking.id, user.id)
+
+        if force and getattr(user, "role", None) == "admin":
+            original = {"start": booking.start.isoformat(), "end": booking.end.isoformat()}
+            booking.environment_id = environment.id
+            booking.start = start
+            booking.end = end
+            db.session.flush()
+            details = {
+                "forced": True,
+                "original": original,
+                "new": {"start": start.isoformat(), "end": end.isoformat()}
+            }
+            cls.log_action("forced_edit", user.id, booking.id, details=details, commit=False)
+            db.session.commit()
+            return True, booking
+
+        ok, err = cls._validate_single(environment.id, start, end, exclude_id=booking.id)
+        if not ok:
+            if err.startswith("This slot"):
+                return False, "clash"
+            return False, err
+
+        original = {"start": booking.start.isoformat(), "end": booking.end.isoformat()}
+        booking.environment_id = environment.id
+        booking.start = start
+        booking.end = end
+        db.session.flush()
+        details = {
+            "original": original,
+            "new": {"start": start.isoformat(), "end": end.isoformat()}
+        }
+        cls.log_action("edit_booking", user.id, booking.id, details=details, commit=False)
+        db.session.commit()
+        return True, booking
 
     @classmethod
     def series_suggestion_context(cls, form, env, start_dt, end_dt):
-        s, e = cls.find_series_suggestion(env, start_dt.date(), end_dt.date(), form.days_of_week.data, start_dt.time(), end_dt.time())
+        s, e = cls.find_series_suggestion(
+            env, start_dt.date(), end_dt.date(),
+            form.days_of_week.data, start_dt.time(), end_dt.time()
+        )
         weekdays_str = ", ".join(dict(form.days_of_week.choices)[d] for d in form.days_of_week.data)
-        ctx = {"form": form, "clash": True, "weekdays_str": weekdays_str}
-
+        ctx = {"form": form, "clash": True, "weekdays_str": weekdays_str,
+               "orig_start_dt": start_dt.isoformat(),
+               "orig_end_dt": end_dt.isoformat()}
         if s:
             ctx.update({
                 "suggestion": True,
                 "sug_start_time": s.strftime("%H:%M"),
-                "sug_end_time": e.strftime("%H:%M"),
-                "orig_start_dt": start_dt.isoformat(),
-                "orig_end_dt": end_dt.isoformat()
+                "sug_end_time": e.strftime("%H:%M")
             })
         else:
-            ctx.update({
-                "suggestion": False,
-                "orig_start_dt": start_dt.isoformat(),
-                "orig_end_dt": end_dt.isoformat()
-            })
+            ctx["suggestion"] = False
         return ctx
 
     @classmethod
@@ -355,56 +359,5 @@ class BookingService:
             "Content-Disposition": f"attachment; filename=booking-{booking.id}.ics",
             "Content-Type": "text/calendar; charset=utf-8"
         }
-        logger.info(f"ICS calendar response generated for booking {booking.id}")
+        logger.info("Generated ICS for booking %s", booking.id)
         return Response(payload, headers=headers)
-
-    @classmethod
-    def attempt_edit_booking(cls, booking, user, environment, start, end, force=False):
-        """
-        Attempt to edit an existing booking.
-        Returns:
-        (True, booking) on success,
-        (False, "clash") if there's a conflict and force not applied,
-        (False, errmsg) on other failures.
-        """
-        logger.debug("Attempting edit for booking %s by user %s", booking.id, user.email)
-
-        # If admin forcing update, skip validation
-        if force and user.role == "admin":
-            logger.info("Admin %s forcing edit of booking %s", user.id, booking.id)
-            booking.environment_id = environment.id
-            booking.start = start
-            booking.end = end
-            db.session.commit()
-            db.session.add(AuditLog(
-                action="forced_edit",
-                actor_id=user.id,
-                booking_id=booking.id
-            ))
-            db.session.commit()
-            return True, booking
-
-        # Validate against other bookings (excluding this one)
-        ok, err = cls._validate_single(environment.id, start, end, exclude_id=booking.id)
-        if not ok:
-            if err == "This slot is already booked.":
-                logger.info("Edit clash for booking %s at %s – not forcing", booking.id, start)
-                return False, "clash"
-            logger.warning("Edit validation failed: %s", err)
-            return False, err
-
-        # Update booking fields
-        booking.environment_id = environment.id
-        booking.start = start
-        booking.end = end
-        db.session.commit()
-
-        db.session.add(AuditLog(
-            action="edit_booking",
-            actor_id=user.id,
-            booking_id=booking.id
-        ))
-        db.session.commit()
-
-        logger.info("Booking %s successfully updated by user %s", booking.id, user.email)
-        return True, booking

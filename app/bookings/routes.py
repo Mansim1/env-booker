@@ -7,7 +7,7 @@ from markupsafe import Markup
 from datetime import datetime
 from app import db
 from app.environment.forms import DeleteForm
-from app.models import Environment, Booking
+from app.models import AuditLog, Environment, Booking
 from app.bookings.forms import BookingForm, SeriesBookingForm
 from app.bookings.service import BookingService
 import logging
@@ -219,6 +219,7 @@ def download_ics(booking_id):
     logger.debug("Generating .ics file for booking %d by %s", booking_id, current_user.email)
     return BookingService.generate_ics_response(booking)
 
+
 @bookings_bp.route("/<int:booking_id>/edit", methods=["GET", "POST"])
 @login_required
 def edit_booking(booking_id):
@@ -279,6 +280,7 @@ def edit_booking(booking_id):
 
     return render_template("bookings/form.html", form=form, edit=True, booking=booking)
 
+
 @bookings_bp.route("/<int:booking_id>/delete", methods=["POST"])
 @login_required
 def delete_booking(booking_id):
@@ -288,6 +290,12 @@ def delete_booking(booking_id):
         abort(403)
 
     db.session.delete(booking)
+    db.session.add(AuditLog(
+        action="delete_booking",
+        actor_id=current_user.id,
+        booking_id=booking.id,
+        details=f"Deleted booking {booking.id}"
+    ))
     db.session.commit()
     flash("Booking deleted.", "success")
     return redirect(url_for("bookings.list_bookings"))
