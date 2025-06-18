@@ -3,6 +3,11 @@
 {% block content %}
   <div class="container mt-4">
     <h2>New Series Booking</h2>
+    <div class="alert alert-secondary small">
+        <strong>How to use:</strong><br>
+        The <strong>time</strong> in your start and end fields defines the daily session duration (e.g., 10–11 AM), while the <strong>dates</strong> define the overall range for how long the pattern repeats (e.g., from June 17 to June 28).<br>
+        Your chosen weekdays determine which days within that range will be booked.
+      </div>      
 
     {# If there was a clash, display the relevant alert(s) #}
     {% if clash %}
@@ -30,7 +35,7 @@
         </div>
       {% else %}
         <div class="alert alert-danger">
-          No alternative series available within ±3 hours.
+            Booking failed due to clash. No alternative series available within ±3 hours.
         </div>
       {% endif %}
 

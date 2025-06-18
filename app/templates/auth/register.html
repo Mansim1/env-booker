@@ -19,7 +19,7 @@
     <div class="mb-3">
       {{ form.password.label(class="form-label") }}
       {{ form.password(class="form-control", placeholder="Strong password", aria_label="Password") }}
-      <div class="form-text">At least 8 characters.</div>
+      <div class="form-text">At least 8 characters, include a letter, number, and special character (@#$%^&+=!).</div>
       {% for err in form.password.errors %}
         <div class="form-text text-danger">{{ err }}</div>
       {% endfor %}

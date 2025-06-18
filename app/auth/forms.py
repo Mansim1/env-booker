@@ -6,12 +6,11 @@ from wtforms.validators import (
     EqualTo,
     Length,
     Regexp,
-    ValidationError,
 )
 
 from app.auth.validators import no_sql_injection
 
-
+# Registration form with email, password, confirm password
 class RegistrationForm(FlaskForm):
     email = StringField(
         "Email",
@@ -23,17 +22,19 @@ class RegistrationForm(FlaskForm):
         ],
         filters=[lambda x: x.strip() if x else None],
     )
+
     password = PasswordField(
         "Password",
         validators=[
             DataRequired(message="Password is required."),
             Length(min=8, message="Password must be at least 8 characters long."),
             Regexp(
-                r"^[A-Za-z0-9@#$%^&+=!]+$",
-                message="Password contains invalid characters.",
+                r"^(?=.*[A-Za-z])(?=.*\d)(?=.*[@#$%^&+=!])[A-Za-z\d@#$%^&+=!]+$",
+                message="Password must include a letter, number, and special character (@#$%^&+=!).",
             ),
         ],
     )
+
     confirm = PasswordField(
         "Confirm Password",
         validators=[
@@ -41,9 +42,10 @@ class RegistrationForm(FlaskForm):
             EqualTo("password", message="Passwords do not match."),
         ],
     )
+
     submit = SubmitField("Sign Up")
 
-
+# Login form with email and password
 class LoginForm(FlaskForm):
     email = StringField(
         "Email",
@@ -55,6 +57,7 @@ class LoginForm(FlaskForm):
         ],
         filters=[lambda x: x.strip() if x else None],
     )
+
     password = PasswordField(
         "Password",
         validators=[
@@ -62,4 +65,5 @@ class LoginForm(FlaskForm):
             Length(min=8, message="Password must be at least 8 characters."),
         ],
     )
+
     submit = SubmitField("Log In")
