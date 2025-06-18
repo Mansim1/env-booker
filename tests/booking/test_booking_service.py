@@ -1,9 +1,9 @@
 import pytest
 from datetime import datetime, timedelta
 from app import db
-from app.models import AuditLog, Booking, Environment, User
+from app.models import Booking, Environment, User
 from app.bookings.service import BookingService
-from tests.utils import future_datetime, login_user, login_admin
+from tests.utils import future_datetime, login_user
 
 # Utility to get environment object safely
 def get_environment():

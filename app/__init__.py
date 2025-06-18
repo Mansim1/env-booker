@@ -13,11 +13,6 @@ config_map = {
     "production":  "config.ProductionConfig",
 }
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
-
 def create_app(config_name=None):
     app = Flask(__name__, instance_relative_config=False)
 
@@ -54,5 +49,10 @@ def create_app(config_name=None):
     app.register_blueprint(env_bp)
     app.register_blueprint(bookings_bp)
     app.register_blueprint(audit_bp)
+
+    logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
 
     return app

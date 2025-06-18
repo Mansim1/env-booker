@@ -1,4 +1,3 @@
-# app/audit/routes.py
 from flask import Blueprint, abort, render_template
 from flask_login import login_required, current_user
 from app.models import AuditLog
