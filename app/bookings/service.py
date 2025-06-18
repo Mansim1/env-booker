@@ -16,61 +16,80 @@ class BookingService:
     SUGGESTION_STEP = timedelta(minutes=15)
 
     @staticmethod
-    def _overlap_exists(env_id, start, end):
+    def _overlap_exists(env_id, start, end, exclude_id=None):
         """
         Check if any existing booking overlaps with the proposed time range.
+        Optionally exclude a booking ID (useful when editing).
         """
-        overlap = db.session.query(Booking.id).filter(
+        q = db.session.query(Booking.id).filter(
             Booking.environment_id == env_id,
             Booking.end > start,
             Booking.start < end
-        ).first() is not None
-        logger.debug("Overlap check for env_id=%s, start=%s, end=%s: %s", env_id, start, end, overlap)
+        )
+
+        if exclude_id:
+            q = q.filter(Booking.id != exclude_id)
+
+        overlap = q.first() is not None
+        logger.debug("Overlap check for env_id=%s, start=%s, end=%s, exclude_id=%s: %s",
+                    env_id, start, end, exclude_id, overlap)
         return overlap
 
     @staticmethod
-    def _daily_util_seconds(env_id, day):
+    def _daily_util_seconds(env_id, day, exclude_id=None):
         """
         Calculate how many seconds of bookings already exist on a specific day
-        for the given environment.
+        for the given environment. Optionally exclude one booking (e.g., during editing).
         """
         day_start = datetime.combine(day, datetime.min.time())
         day_end   = datetime.combine(day, datetime.max.time())
-        seconds = db.session.query(
+
+        q = db.session.query(
             func.coalesce(
                 func.sum(
                     func.strftime('%s', Booking.end) - func.strftime('%s', Booking.start)
-                ), 
+                ),
                 0
             )
         ).filter(
             Booking.environment_id == env_id,
             Booking.start >= day_start,
             Booking.start <= day_end
-        ).scalar()
-        logger.debug("Daily utilization for env_id=%s on %s: %s seconds", env_id, day, seconds)
+        )
+
+        if exclude_id:
+            q = q.filter(Booking.id != exclude_id)
+
+        seconds = q.scalar()
+        logger.debug("Daily utilization for env_id=%s on %s (excluding ID %s): %s seconds",
+                    env_id, day, exclude_id, seconds)
         return seconds or 0
 
     @classmethod
-    def _validate_single(cls, env_id, start, end):
+    def _validate_single(cls, env_id, start, end, exclude_id=None):
         """
         Enforce all validation rules on a single booking slot:
         - End after start
         - Duration within limit
         - Daily capacity not exceeded
-        - No time overlaps
+        - No time overlaps (excluding given booking ID if editing)
         """
-        logger.debug("Validating booking for env_id=%s from %s to %s", env_id, start, end)
+        logger.debug("Validating booking for env_id=%s from %s to %s (exclude_id=%s)", env_id, start, end, exclude_id)
+
         if end <= start:
             return False, "End time must be after start time."
+
         dur = end - start
         if dur > cls.MAX_DURATION:
             return False, "Booking cannot exceed 8 hours."
-        used = cls._daily_util_seconds(env_id, start.date())
-        if used + dur.total_seconds() > 24*3600*cls.DAILY_UTILIZATION_CAP:
+
+        used = cls._daily_util_seconds(env_id, start.date(), exclude_id=exclude_id)
+        if used + dur.total_seconds() > 24 * 3600 * cls.DAILY_UTILIZATION_CAP:
             return False, "Cannot book: daily utilization cap (90 %) reached."
-        if cls._overlap_exists(env_id, start, end):
+
+        if cls._overlap_exists(env_id, start, end, exclude_id=exclude_id):
             return False, "This slot is already booked."
+
         return True, None
 
     @classmethod
@@ -338,3 +357,54 @@ class BookingService:
         }
         logger.info(f"ICS calendar response generated for booking {booking.id}")
         return Response(payload, headers=headers)
+
+    @classmethod
+    def attempt_edit_booking(cls, booking, user, environment, start, end, force=False):
+        """
+        Attempt to edit an existing booking.
+        Returns:
+        (True, booking) on success,
+        (False, "clash") if there's a conflict and force not applied,
+        (False, errmsg) on other failures.
+        """
+        logger.debug("Attempting edit for booking %s by user %s", booking.id, user.email)
+
+        # If admin forcing update, skip validation
+        if force and user.role == "admin":
+            logger.info("Admin %s forcing edit of booking %s", user.id, booking.id)
+            booking.environment_id = environment.id
+            booking.start = start
+            booking.end = end
+            db.session.commit()
+            db.session.add(AuditLog(
+                action="forced_edit",
+                actor_id=user.id,
+                booking_id=booking.id
+            ))
+            db.session.commit()
+            return True, booking
+
+        # Validate against other bookings (excluding this one)
+        ok, err = cls._validate_single(environment.id, start, end, exclude_id=booking.id)
+        if not ok:
+            if err == "This slot is already booked.":
+                logger.info("Edit clash for booking %s at %s – not forcing", booking.id, start)
+                return False, "clash"
+            logger.warning("Edit validation failed: %s", err)
+            return False, err
+
+        # Update booking fields
+        booking.environment_id = environment.id
+        booking.start = start
+        booking.end = end
+        db.session.commit()
+
+        db.session.add(AuditLog(
+            action="edit_booking",
+            actor_id=user.id,
+            booking_id=booking.id
+        ))
+        db.session.commit()
+
+        logger.info("Booking %s successfully updated by user %s", booking.id, user.email)
+        return True, booking

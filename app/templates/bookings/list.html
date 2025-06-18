@@ -23,6 +23,7 @@
               <th>User</th>
             {% endif %}
             <th>Add to Calendar</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -41,6 +42,44 @@
                 >
                   Download .ics
                 </a>
+              </td>
+              <td>
+                {% if current_user.role == "admin" or current_user.id == b.user_id %}
+                  <a
+                    href="{{ url_for('bookings.edit_booking', booking_id=b.id) }}"
+                    class="btn btn-sm btn-outline-primary me-1"
+                  >
+                    Edit
+                  </a>
+
+                  <!-- Delete Button triggers Modal -->
+                  <button class="btn btn-sm btn-outline-danger" data-bs-toggle="modal"
+                          data-bs-target="#deleteModal{{ b.id }}">Delete</button>
+
+                  <!-- Modal -->
+                  <div class="modal fade" id="deleteModal{{ b.id }}" tabindex="-1">
+                    <div class="modal-dialog">
+                      <div class="modal-content">
+                        <div class="modal-header">
+                          <h5 class="modal-title">Confirm Delete</h5>
+                          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                          Are you sure you want to delete the booking for
+                          <strong>{{ b.environment.name }}</strong> from
+                          {{ b.start.strftime('%Y-%m-%d %H:%M') }} to {{ b.end.strftime('%Y-%m-%d %H:%M') }}?
+                        </div>
+                        <div class="modal-footer">
+                          <form method="post" action="{{ url_for('bookings.delete_booking', booking_id=b.id) }}">
+                            {{ delete_form.csrf_token }}
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            {{ delete_form.submit(class="btn btn-danger") }}
+                          </form>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                {% endif %}
               </td>
             </tr>
           {% endfor %}

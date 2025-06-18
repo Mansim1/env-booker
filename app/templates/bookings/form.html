@@ -1,14 +1,12 @@
 {% extends "base.html" %}
 {% block content %}
   <div class="container mt-4">
-    <h2>New Booking</h2>
+    <h2>{{ "Edit Booking" if edit else "New Booking" }}</h2>
 
-    {# ── CLASH + ADMIN ── #}
+    {# ── CLASH + ADMIN (force booking option) ── #}
     {% if clash and can_force %}
-      <form
-        method="post"
-        action="{{ url_for('bookings.create_booking', force='true') }}"
-      >
+      <form method="post"
+            action="{{ url_for('bookings.edit_booking', booking_id=booking.id, force='true') if edit else url_for('bookings.create_booking', force='true') }}">
         {{ form.hidden_tag() }}
         <input type="hidden" name="{{ form.environment.name }}" value="{{ form.environment.data }}">
         <input type="hidden" name="{{ form.start.name }}" value="{{ orig_start }}">
@@ -17,7 +15,7 @@
       </form>
     {% endif %}
 
-    {# ── NORMAL FORM ── #}
+    {# ── MAIN FORM ── #}
     <form method="post" novalidate>
       {{ form.hidden_tag() }}
 
@@ -31,7 +29,7 @@
 
       <div class="mb-3">
         {{ form.start.label(class="form-label") }}
-        {{ form.start(class="form-control", min=min_date) }}
+        {{ form.start(class="form-control", type="datetime-local", value=form.start.data.strftime('%Y-%m-%dT%H:%M') if form.start.data else '') }}
         {% for e in form.start.errors %}
           <div class="text-danger">{{ e }}</div>
         {% endfor %}
@@ -39,19 +37,23 @@
 
       <div class="mb-3">
         {{ form.end.label(class="form-label") }}
-        {{ form.end(class="form-control", min=min_date) }}
+        {{ form.end(class="form-control", type="datetime-local", value=form.end.data.strftime('%Y-%m-%dT%H:%M') if form.end.data else '') }}
         {% for e in form.end.errors %}
           <div class="text-danger">{{ e }}</div>
         {% endfor %}
       </div>
 
-      <button type="submit" class="btn btn-primary">Book</button>
+      <button type="submit" class="btn btn-primary">
+        {{ "Update Booking" if edit else form.submit.label.text }}
+      </button>
       <a href="{{ url_for('bookings.list_bookings') }}" class="btn btn-secondary">Cancel</a>
     </form>
 
+    {% if not edit %}
     <p class="mt-4 text-muted">
       Want to book recurring slots instead?
       <a href="{{ url_for('bookings.create_series_booking') }}" class="btn btn-outline-secondary btn-sm ms-2">Book Series</a>
     </p>
+    {% endif %}
   </div>
 {% endblock %}

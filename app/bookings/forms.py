@@ -1,5 +1,5 @@
 from flask_wtf import FlaskForm
-from wtforms import DateTimeLocalField, SelectField, SelectMultipleField, SubmitField, ValidationError
+from wtforms import DateTimeLocalField, HiddenField, SelectField, SelectMultipleField, SubmitField, ValidationError
 from wtforms.validators import DataRequired
 from datetime import datetime
 import logging
@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 # Form for single booking creation
 class BookingForm(FlaskForm):
-    # Dropdown to select environment (e.g., "Integration A")
+    # Dropdown to select environment
     environment = SelectField(
         "Environment",
         coerce=int,
@@ -115,3 +115,12 @@ class SeriesBookingForm(FlaskForm):
         if not field.data:
             logger.warning("No weekdays selected for series booking.")
             raise ValidationError("Select at least one day of week.")
+
+class EditBookingForm(BookingForm):
+    """Form for editing an existing booking."""
+    booking_id = HiddenField()
+    submit = SubmitField("Update")
+
+class DeleteBookingForm(FlaskForm):
+    """Simple delete form with just a submit button."""
+    submit = SubmitField("Delete")
