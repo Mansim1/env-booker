@@ -1,5 +1,8 @@
+# app/services/booking_service.py
+
 import json
 import logging
+import ast
 from datetime import datetime, timedelta, timezone, time
 from flask import Response, url_for
 from sqlalchemy import func
@@ -14,6 +17,33 @@ class BookingService:
     DAILY_UTILIZATION_CAP = 0.90
     SUGGESTION_WINDOW = timedelta(hours=3)
     SUGGESTION_STEP = timedelta(minutes=15)
+
+    @staticmethod
+    def log_action(action, actor_id, booking_id=None, details=None, commit=True):
+        """
+        Always record an AuditLog entry:
+          - dict → JSON‐dumped
+          - anything else → str()
+        """
+        if isinstance(details, dict):
+            details = json.dumps(details, default=str)
+        else:
+            details = str(details) if details is not None else None
+
+        entry = AuditLog(
+            action=action,
+            actor_id=actor_id,
+            booking_id=booking_id,
+            details=details
+        )
+        db.session.add(entry)
+        if commit:
+            db.session.commit()
+
+        logger.debug(
+            "AuditLog: action=%s actor=%s booking=%s details=%s",
+            action, actor_id, booking_id, details
+        )
 
     @staticmethod
     def _overlap_exists(env_id, start, end, exclude_id=None):
@@ -55,22 +85,6 @@ class BookingService:
                      env_id, day, exclude_id, secs)
         return secs
 
-    @staticmethod
-    def log_action(action, actor_id, booking_id=None, details=None, commit=True):
-        if isinstance(details, dict):
-            details = json.dumps(details, default=str)
-        entry = AuditLog(
-            action=action,
-            actor_id=actor_id,
-            booking_id=booking_id,
-            details=details
-        )
-        db.session.add(entry)
-        if commit:
-            db.session.commit()
-        logger.debug("AuditLog: action=%s actor=%s booking=%s details=%s",
-                     action, actor_id, booking_id, details)
-
     @classmethod
     def _validate_single(cls, env_id, start, end, exclude_id=None):
         logger.debug("Validating: env=%s start=%s end=%s excl=%s",
@@ -88,31 +102,28 @@ class BookingService:
         return True, None
 
     @classmethod
-    def create_booking(cls, user, environment, start, end):
-        ok, err = cls._validate_single(environment.id, start, end)
-        if not ok:
-            logger.warning("Booking validation failed for user %s: %s", user.id, err)
-            return False, err
-
-        b = Booking(
-            environment_id=environment.id,
-            user_id=user.id,
-            start=start,
-            end=end
+    def delete_booking(cls, booking, user, commit=True):
+        """
+        Delete a Booking and emit an AuditLog entry.
+        """
+        # Build a human-readable message
+        msg = (
+            f"Deleted booking #{booking.id} in env “{booking.environment.name}” "
+            f"(ID {booking.environment.id}) from "
+            f"{booking.start:%Y-%m-%d %H:%M} to {booking.end:%Y-%m-%d %H:%M}"
         )
-        db.session.add(b)
-        db.session.flush()
-        details = {
-            "env_id": environment.id,
-            "env_name": environment.name,
-            "start": start.isoformat(),
-            "end": end.isoformat()
-        }
-        cls.log_action("create_booking", user.id, b.id, details=details, commit=False)
-        db.session.commit()
 
-        logger.info("Booking %s created for user %s", b.id, user.id)
-        return True, b
+        # Perform deletion
+        db.session.delete(booking)
+
+        # Audit-log it
+        cls.log_action("delete_booking", user.id, booking.id, details=msg, commit=False)
+
+        # Commit if desired
+        if commit:
+            db.session.commit()
+
+        logger.info("Booking %s deleted by user %s", booking.id, user.id)
 
     @classmethod
     def _build_slots(cls, start_dt, end_dt, weekdays):
@@ -131,22 +142,18 @@ class BookingService:
     @classmethod
     def _bulk_insert_with_audit(cls, user, environment, slots, action):
         for start, end in slots:
-            b = Booking(
-                environment_id=environment.id,
-                user_id=user.id,
-                start=start,
-                end=end
-            )
+            b = Booking(environment_id=environment.id,
+                        user_id=user.id, start=start, end=end)
             db.session.add(b)
             db.session.flush()
-            details = {
-                "env_id": environment.id,
-                "env_name": environment.name,
-                "start": start.isoformat(),
-                "end": end.isoformat(),
-                "series_action": action
-            }
-            cls.log_action(action, user.id, b.id, details=details, commit=False)
+
+            msg = (
+                f"{action}: booking #{b.id} in env “{environment.name}” "
+                f"(ID {environment.id}) from {start:%Y-%m-%d %H:%M} "
+                f"to {end:%Y-%m-%d %H:%M}"
+            )
+            cls.log_action(action, user.id, b.id, details=msg, commit=False)
+
         logger.info("Bulk inserted %d bookings for user %s", len(slots), user.id)
         return len(slots)
 
@@ -171,6 +178,15 @@ class BookingService:
             count = cls._bulk_insert_with_audit(user, environment, slots, "create_series")
             db.session.commit()
             logger.info("Created series of %d bookings for user %s", count, user.id)
+
+            # SUMMARY log for the whole series
+            summary = (
+                f"Created series of {count} bookings in env “{environment.name}” "
+                f"(ID {environment.id}) from {start_date:%Y-%m-%d} "
+                f"to {end_date:%Y-%m-%d}"
+            )
+            cls.log_action("create_series_summary", user.id, details=summary)
+
             return True, count
         except Exception:
             db.session.rollback()
@@ -184,6 +200,14 @@ class BookingService:
             slots = cls._build_slots(start_dt, end_dt, weekdays)
             count = cls._bulk_insert_with_audit(user, environment, slots, "forced_series_book")
             db.session.commit()
+
+            summary = (
+                f"Forced series booking: created {count} bookings in env “{environment.name}” "
+                f"(ID {environment.id}) from {start_dt:%Y-%m-%d %H:%M} "
+                f"to {end_dt:%Y-%m-%d %H:%M}"
+            )
+            cls.log_action("forced_series_booking_summary", user.id, details=summary)
+
             return True, (count, True)
 
         ok, result = cls.create_series(
@@ -255,11 +279,16 @@ class BookingService:
     def attempt_single_booking(cls, user, environment, start, end,
                                accept_suggestion=False, force=False):
         if force and getattr(user, "role", None) == "admin":
-            b = Booking(environment_id=environment.id, user_id=user.id, start=start, end=end)
+            b = Booking(environment_id=environment.id, user_id=user.id,
+                        start=start, end=end)
             db.session.add(b)
             db.session.flush()
-            details = {"forced": True, "start": start.isoformat(), "end": end.isoformat()}
-            cls.log_action("forced_single_book", user.id, b.id, details=details, commit=False)
+
+            msg = (
+                f"Forced booking #{b.id} in env “{environment.name}” "
+                f"from {start:%Y-%m-%d %H:%M} to {end:%Y-%m-%d %H:%M}"
+            )
+            cls.log_action("forced_single_book", user.id, b.id, details=msg, commit=False)
             db.session.commit()
             return True, b
 
@@ -269,35 +298,38 @@ class BookingService:
                 return False, "clash"
             return False, err
 
-        b = Booking(environment_id=environment.id, user_id=user.id, start=start, end=end)
+        b = Booking(environment_id=environment.id, user_id=user.id,
+                    start=start, end=end)
         db.session.add(b)
         db.session.flush()
+
         action = "accept_suggestion" if accept_suggestion else "create_booking"
-        details = {
-            "start": start.isoformat(),
-            "end": end.isoformat(),
-            "accepted_suggestion": accept_suggestion
-        }
-        cls.log_action(action, user.id, b.id, details=details, commit=False)
+        msg = (
+            f"{action}: booking #{b.id} in env “{environment.name}” "
+            f"from {start:%Y-%m-%d %H:%M} to {end:%Y-%m-%d %H:%M}, "
+            f"accepted_suggestion={accept_suggestion}"
+        )
+        cls.log_action(action, user.id, b.id, details=msg, commit=False)
         db.session.commit()
         return True, b
 
     @classmethod
     def attempt_edit_booking(cls, booking, user, environment, start, end, force=False):
-        logger.debug("Editing booking %s by user %s", booking.id, user.id)
+        original = {"start": booking.start, "end": booking.end}
 
         if force and getattr(user, "role", None) == "admin":
-            original = {"start": booking.start.isoformat(), "end": booking.end.isoformat()}
             booking.environment_id = environment.id
             booking.start = start
             booking.end = end
             db.session.flush()
-            details = {
-                "forced": True,
-                "original": original,
-                "new": {"start": start.isoformat(), "end": end.isoformat()}
-            }
-            cls.log_action("forced_edit", user.id, booking.id, details=details, commit=False)
+
+            msg = (
+                f"Forced edit of booking #{booking.id} in env “{environment.name}” – "
+                f"from {original['start']:%Y-%m-%d %H:%M}–"
+                f"{original['end']:%Y-%m-%d %H:%M} to "
+                f"{start:%Y-%m-%d %H:%M}–{end:%Y-%m-%d %H:%M}"
+            )
+            cls.log_action("forced_edit", user.id, booking.id, details=msg, commit=False)
             db.session.commit()
             return True, booking
 
@@ -307,16 +339,18 @@ class BookingService:
                 return False, "clash"
             return False, err
 
-        original = {"start": booking.start.isoformat(), "end": booking.end.isoformat()}
         booking.environment_id = environment.id
         booking.start = start
         booking.end = end
         db.session.flush()
-        details = {
-            "original": original,
-            "new": {"start": start.isoformat(), "end": end.isoformat()}
-        }
-        cls.log_action("edit_booking", user.id, booking.id, details=details, commit=False)
+
+        msg = (
+            f"Edited booking #{booking.id} in env “{environment.name}” – "
+            f"from {original['start']:%Y-%m-%d %H:%M}–"
+            f"{original['end']:%Y-%m-%d %H:%M} to "
+            f"{start:%Y-%m-%d %H:%M}–{end:%Y-%m-%d %H:%M}"
+        )
+        cls.log_action("edit_booking", user.id, booking.id, details=msg, commit=False)
         db.session.commit()
         return True, booking
 
@@ -345,8 +379,7 @@ class BookingService:
         now_utc = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         lines = [
             "BEGIN:VCALENDAR", "VERSION:2.0",
-            "PRODID:-//EasyEnvBooker//EN",
-            "BEGIN:VEVENT",
+            "PRODID:-//EasyEnvBooker//EN", "BEGIN:VEVENT",
             f"UID:booking-{booking.id}@easyenvbooker.local",
             f"DTSTAMP:{now_utc}",
             f"DTSTART:{booking.start.strftime('%Y%m%dT%H%M%S')}",

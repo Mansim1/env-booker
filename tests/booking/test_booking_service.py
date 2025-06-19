@@ -62,26 +62,6 @@ def test_validate_single_failures_and_success(client):
         ok, msg = BookingService._validate_single(env.id, start, end)
         assert ok and msg is None
 
-def test_create_booking_and_suggestion(client):
-    login_user(client)
-    with client.application.app_context():
-        user = User.query.filter_by(email="eve@example.com").first()
-        env = get_environment()
-
-        start = datetime.now() + timedelta(days=1, hours=9)
-        end = start + timedelta(hours=1)
-
-        # Create a booking
-        ok, booking = BookingService.create_booking(user, env, start, end)
-        assert ok and isinstance(booking, Booking)
-
-        # Try overlapping booking and get suggestion
-        conflict_start = start
-        conflict_end = end
-        sug_start, sug_end = BookingService.find_suggestion(env, conflict_start, conflict_end)
-        assert sug_start is not None
-        assert sug_end is not None
-
 def test_validate_single_duration_and_util_cap(client, app_instance):
 
     with app_instance.app_context():

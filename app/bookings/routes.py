@@ -284,18 +284,15 @@ def edit_booking(booking_id):
 @bookings_bp.route("/<int:booking_id>/delete", methods=["POST"])
 @login_required
 def delete_booking(booking_id):
-    """Allow for Deleting enviroment bookings"""
+    """Allow for deleting environment bookings."""
     booking = Booking.query.get_or_404(booking_id)
+
+    # only admins or the owner may delete
     if current_user.role != "admin" and booking.user_id != current_user.id:
         abort(403)
 
-    db.session.delete(booking)
-    db.session.add(AuditLog(
-        action="delete_booking",
-        actor_id=current_user.id,
-        booking_id=booking.id,
-        details=f"Deleted booking {booking.id}"
-    ))
-    db.session.commit()
+    # Delegate to service (which logs & audits)
+    BookingService.delete_booking(booking, current_user)
+
     flash("Booking deleted.", "success")
     return redirect(url_for("bookings.list_bookings"))

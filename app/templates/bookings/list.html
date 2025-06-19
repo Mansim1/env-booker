@@ -1,25 +1,46 @@
+{# templates/bookings/list.html #}
 {% extends "base.html" %}
+
+{% block head %}
+  {{ super() }}
+  <style>
+    /* Hide DataTables’ built-in global search (we’re not using it) */
+    .dataTables_filter { display: none !important; }
+
+    /* Give “Show … entries” dropdown a sensible width */
+    .dataTables_length select {
+      min-width: 4rem;
+      padding-right: 1.5rem;
+      display: inline-block;
+    }
+    .dataTables_length label { white-space: nowrap; }
+  </style>
+{% endblock %}
+
+{% block title %}Bookings — Environment Booker{% endblock %}
+
 {% block content %}
-  <div class="container mt-4">
-    <h2>Bookings</h2>
+<div class="container mt-4">
+  <h2>Bookings</h2>
 
-    <div class="mb-3">
-      <a href="{{ url_for('bookings.create_booking') }}" class="btn btn-primary me-2">
-        New Booking
-      </a>
-      <a href="{{ url_for('bookings.create_series_booking') }}" class="btn btn-secondary">
-        New Series Booking
-      </a>
-    </div>
+  <div class="mb-3">
+    <a href="{{ url_for('bookings.create_booking') }}" class="btn btn-primary me-2">
+      New Booking
+    </a>
+    <a href="{{ url_for('bookings.create_series_booking') }}" class="btn btn-secondary">
+      New Series Booking
+    </a>
+  </div>
 
-    {% if bookings %}
-      <table class="table table-striped">
-        <thead>
+  {% if bookings %}
+    <div class="table-responsive">
+      <table id="bookingTable" class="table table-striped table-hover">
+        <thead class="table-light">
           <tr>
             <th>Environment</th>
             <th>Start</th>
             <th>End</th>
-            {% if current_user.role == "admin" %}
+            {% if current_user.is_authenticated and current_user.role == 'admin' %}
               <th>User</th>
             {% endif %}
             <th>Add to Calendar</th>
@@ -28,65 +49,83 @@
         </thead>
         <tbody>
           {% for b in bookings %}
-            <tr>
-              <td>{{ b.environment.name }}</td>
-              <td>{{ b.start.strftime("%Y-%m-%d %H:%M") }}</td>
-              <td>{{ b.end.strftime("%Y-%m-%d %H:%M") }}</td>
-              {% if current_user.role == "admin" %}
-                <td>{{ b.user.email }}</td>
+          <tr>
+            <td>{{ b.environment.name }}</td>
+            <td>{{ b.start.strftime('%Y-%m-%d %H:%M') }}</td>
+            <td>{{ b.end.strftime('%Y-%m-%d %H:%M') }}</td>
+            {% if current_user.is_authenticated and current_user.role == 'admin' %}
+              <td>{{ b.user.email }}</td>
+            {% endif %}
+            <td>
+              <a href="{{ url_for('bookings.download_ics', booking_id=b.id) }}"
+                 class="btn btn-sm btn-outline-secondary">
+                Download .ics
+              </a>
+            </td>
+            <td>
+              {% if current_user.is_authenticated and (current_user.role == 'admin' or current_user.id == b.user_id) %}
+                <a href="{{ url_for('bookings.edit_booking', booking_id=b.id) }}"
+                   class="btn btn-sm btn-outline-primary me-1">Edit</a>
+                <button class="btn btn-sm btn-outline-danger"
+                        data-bs-toggle="modal"
+                        data-bs-target="#deleteModal{{ b.id }}">
+                  Delete
+                </button>
               {% endif %}
-              <td>
-                <a
-                  href="{{ url_for('bookings.download_ics', booking_id=b.id) }}"
-                  class="btn btn-sm btn-outline-secondary"
-                >
-                  Download .ics
-                </a>
-              </td>
-              <td>
-                {% if current_user.role == "admin" or current_user.id == b.user_id %}
-                  <a
-                    href="{{ url_for('bookings.edit_booking', booking_id=b.id) }}"
-                    class="btn btn-sm btn-outline-primary me-1"
-                  >
-                    Edit
-                  </a>
-
-                  <!-- Delete Button triggers Modal -->
-                  <button class="btn btn-sm btn-outline-danger" data-bs-toggle="modal"
-                          data-bs-target="#deleteModal{{ b.id }}">Delete</button>
-
-                  <!-- Modal -->
-                  <div class="modal fade" id="deleteModal{{ b.id }}" tabindex="-1">
-                    <div class="modal-dialog">
-                      <div class="modal-content">
-                        <div class="modal-header">
-                          <h5 class="modal-title">Confirm Delete</h5>
-                          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                          Are you sure you want to delete the booking for
-                          <strong>{{ b.environment.name }}</strong> from
-                          {{ b.start.strftime('%Y-%m-%d %H:%M') }} to {{ b.end.strftime('%Y-%m-%d %H:%M') }}?
-                        </div>
-                        <div class="modal-footer">
-                          <form method="post" action="{{ url_for('bookings.delete_booking', booking_id=b.id) }}">
-                            {{ delete_form.csrf_token }}
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                            {{ delete_form.submit(class="btn btn-danger") }}
-                          </form>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                {% endif %}
-              </td>
-            </tr>
+            </td>
+          </tr>
           {% endfor %}
         </tbody>
       </table>
-    {% else %}
-      <p>No bookings found.</p>
-    {% endif %}
-  </div>
+    </div>
+
+    {# Modals must be rendered outside the table #}
+    {% for b in bookings %}
+    <div class="modal fade" id="deleteModal{{ b.id }}" tabindex="-1" role="dialog"
+         aria-labelledby="deleteModalLabel{{ b.id }}" aria-modal="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="deleteModalLabel{{ b.id }}">Confirm Delete</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            Are you sure you want to delete the booking for
+            <strong>{{ b.environment.name }}</strong> from
+            {{ b.start.strftime('%Y-%m-%d %H:%M') }} to
+            {{ b.end.strftime('%Y-%m-%d %H:%M') }}?
+          </div>
+          <div class="modal-footer">
+            <form method="post"
+                  action="{{ url_for('bookings.delete_booking', booking_id=b.id) }}">
+              {{ delete_form.csrf_token }}
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+              {{ delete_form.submit(class="btn btn-danger") }}
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+
+  {% else %}
+    <p>No bookings found.</p>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script>
+    $(function() {
+      $('#bookingTable').DataTable({
+        dom: 'lfrtip',         
+        searching: false,      
+        order: [[1, 'desc']], 
+        pageLength: 10,
+        lengthMenu: [[10, 25, 50], [10, 25, 50]],
+        columnDefs: [{ orderable: false, targets: -1 }]
+      });
+    });
+  </script>
 {% endblock %}
