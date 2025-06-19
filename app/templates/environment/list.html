@@ -1,11 +1,38 @@
+{# templates/environment/list.html #}
 {% extends "base.html" %}
+{% block title %}Environments — Environment Booker{% endblock %}
+
+{% block head %}
+  <style>
+    /* Prevent the little arrow from overlapping the number */
+    .dataTables_wrapper .dataTables_length select {
+      min-width: 4rem;               /* ensure it's wide enough */
+      padding-right: 1.5rem;         /* room for the arrow */
+      display: inline-block;
+    }
+    .dataTables_wrapper .dataTables_length label {
+      white-space: nowrap;
+    }
+  </style>
+{% endblock %}
+
 {% block content %}
-  <h2>Environments</h2>
-  <a href="{{ url_for('environment.create_environment') }}" class="btn btn-primary">New Environment</a>
-  <table class="table mt-3">
-    <thead>
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>Environments</h2>
+    <a href="{{ url_for('environment.create_environment') }}" class="btn btn-primary">
+      New Environment
+    </a>
+  </div>
+
+  <table id="envTable" class="table table-striped table-hover">
+    <thead class="table-light">
       <tr>
-        <th>Name</th><th>Owner Squad</th><th>Created At</th><th>Created By</th><th>Actions</th>
+        <th>Name</th>
+        <th>Owner Squad</th>
+        <th>Created At</th>
+        <th>Created By</th>
+        <th class="text-end">Actions</th>
       </tr>
     </thead>
     <tbody>
@@ -15,37 +42,76 @@
         <td>{{ env.owner_squad }}</td>
         <td>{{ env.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
         <td>{{ env.created_by_email }}</td>
-        <td>
-          <a href="{{ url_for('environment.edit_environment', env_id=env.id) }}"
-             class="btn btn-sm btn-secondary">Edit</a>
-          <!-- Delete button triggers modal -->
-          <button class="btn btn-sm btn-danger" data-bs-toggle="modal"
-                  data-bs-target="#deleteModal{{ env.id }}">Delete</button>
-
-          <!-- Modal -->
-          <div class="modal fade" id="deleteModal{{ env.id }}" tabindex="-1">
-            <div class="modal-dialog">
-              <div class="modal-content">
-                <div class="modal-header">
-                  <h5 class="modal-title">Confirm Delete</h5>
-                  <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                  Are you sure you want to delete “{{ env.name }}”?
-                </div>
-                <div class="modal-footer">
-                  <form method="post" action="{{ url_for('environment.delete_environment', env_id=env.id) }}">
-                    {{ delete_form.csrf_token }}
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    {{ delete_form.submit(class="btn btn-danger") }}
-                  </form>
-                </div>
-              </div>
-            </div>
-          </div>
+        <td class="text-end">
+          <a
+            href="{{ url_for('environment.edit_environment', env_id=env.id) }}"
+            class="btn btn-sm btn-secondary me-1"
+          >Edit</a>
+          <button
+            type="button"
+            class="btn btn-sm btn-danger delete-btn"
+            data-bs-toggle="modal"
+            data-bs-target="#deleteModal"
+            data-action-url="{{ url_for('environment.delete_environment', env_id=env.id) }}"
+            data-env-name="{{ env.name }}"
+          >Delete</button>
         </td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header">
+      <h5 class="modal-title" id="deleteModalLabel">Confirm Delete</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+      <p id="deleteModalBody">Are you sure?</p>
+    </div>
+    <div class="modal-footer">
+      <form id="deleteForm" method="post" action="">
+        {{ delete_form.csrf_token }}
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        {{ delete_form.submit(class="btn btn-danger") }}
+      </form>
+    </div>
+  </div></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script>
+    $(function() {
+      $('#envTable').DataTable({
+        dom:
+          // top row: left=length, right=filter
+          "<'row mb-3'<'col-md-6'l><'col-md-6'f>>" +
+          // table wrapped responsively
+          "<'table-responsive't>" +
+          // bottom row: info | pagination
+          "<'row mt-3'<'col-sm-5'i><'col-sm-7'p>>",
+        order: [[2, 'desc']],
+        pageLength: 10,
+        lengthMenu: [[10, 25, 50], [10, 25, 50]],
+        columnDefs: [{ orderable: false, targets: 4 }]
+      });
+
+      // Delete-modal wiring
+      $('#deleteModal')
+        .off('show.bs.modal')
+        .on('show.bs.modal', function(e) {
+          const btn      = e.relatedTarget;
+          const action   = btn.dataset.actionUrl;
+          const name     = btn.dataset.envName;
+          this.querySelector('#deleteModalBody').textContent =
+            `Are you sure you want to delete “${name}”?`;
+          this.querySelector('#deleteForm').action = action;
+        });
+    });
+  </script>
 {% endblock %}

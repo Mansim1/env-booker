@@ -37,6 +37,12 @@ def create_app(config_name=None):
         db.create_all()
         print("✔️ Initialized the database.")
 
+    @app.cli.command("drop-db")
+    def drop_db():
+        """Drop all database tables."""
+        db.drop_all()
+        print("✔️ Dropped the database.")
+
     # 5. Import and register Blueprints here (after db & login exist)
     from app.main.routes        import main_bp
     from app.auth.routes        import auth_bp

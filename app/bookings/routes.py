@@ -6,7 +6,8 @@ from flask_login import login_required, current_user
 from markupsafe import Markup
 from datetime import datetime
 from app import db
-from app.models import Environment, Booking
+from app.environment.forms import DeleteForm
+from app.models import AuditLog, Environment, Booking
 from app.bookings.forms import BookingForm, SeriesBookingForm
 from app.bookings.service import BookingService
 import logging
@@ -25,7 +26,7 @@ def list_bookings():
     q = Booking.query.order_by(Booking.start)
     if current_user.role != "admin":
         q = q.filter_by(user_id=current_user.id)
-    return render_template("bookings/list.html", bookings=q.all())
+    return render_template("bookings/list.html", bookings=q.all(), delete_form=DeleteForm())
 
 
 @bookings_bp.route("/new", methods=["GET", "POST"])
@@ -217,3 +218,81 @@ def download_ics(booking_id):
         abort(403)
     logger.debug("Generating .ics file for booking %d by %s", booking_id, current_user.email)
     return BookingService.generate_ics_response(booking)
+
+
+@bookings_bp.route("/<int:booking_id>/edit", methods=["GET", "POST"])
+@login_required
+def edit_booking(booking_id):
+    booking = db.session.get(Booking, booking_id) or abort(404)
+    if current_user.role != "admin" and booking.user_id != current_user.id:
+        abort(403)
+
+    form = BookingForm(obj=booking)
+    force_flag = (request.args.get("force") == "true")
+    is_admin   = (current_user.role == "admin")
+
+    if form.validate_on_submit():
+        env   = db.session.get(Environment, form.environment.data) or abort(404)
+        start = form.start.data
+        end   = form.end.data
+
+        if start < datetime.now():
+            flash("Cannot set booking to a time in the past.", "danger")
+            return render_template("bookings/form.html", form=form, edit=True, booking=booking)
+
+        logger.info("Edit attempt by %s for booking %d to %s (%s–%s)", current_user.email, booking.id, env.name, start, end)
+
+        ok, result = BookingService.attempt_edit_booking(
+            booking=booking,
+            user=current_user,
+            environment=env,
+            start=start,
+            end=end,
+            force=force_flag
+        )
+
+        if not ok:
+            logger.warning("Booking edit failed for %s: %s", current_user.email, result)
+
+            if result == "clash":
+                flash(Markup(BookingService.single_suggestion_flash(env, start, end)), "info")
+
+                if is_admin and not force_flag:
+                    orig_start = start.strftime("%Y-%m-%dT%H:%M")
+                    orig_end   = end.strftime("%Y-%m-%dT%H:%M")
+                    return render_template(
+                        "bookings/form.html",
+                        form=form,
+                        clash=True,
+                        can_force=True,
+                        orig_start=orig_start,
+                        orig_end=orig_end,
+                        edit=True,
+                        booking=booking
+                    )
+            else:
+                flash(result, "danger")
+
+            return render_template("bookings/form.html", form=form, edit=True, booking=booking)
+
+        flash("Booking updated successfully.", "success")
+        return redirect(url_for("bookings.list_bookings"))
+
+    return render_template("bookings/form.html", form=form, edit=True, booking=booking)
+
+
+@bookings_bp.route("/<int:booking_id>/delete", methods=["POST"])
+@login_required
+def delete_booking(booking_id):
+    """Allow for deleting environment bookings."""
+    booking = Booking.query.get_or_404(booking_id)
+
+    # only admins or the owner may delete
+    if current_user.role != "admin" and booking.user_id != current_user.id:
+        abort(403)
+
+    # Delegate to service (which logs & audits)
+    BookingService.delete_booking(booking, current_user)
+
+    flash("Booking deleted.", "success")
+    return redirect(url_for("bookings.list_bookings"))

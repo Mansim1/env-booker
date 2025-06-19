@@ -45,10 +45,15 @@ class Booking(db.Model):
 class AuditLog(db.Model):
     __tablename__ = "audit_log"
     id = db.Column(db.Integer, primary_key=True)
-    action = db.Column(db.String(50), nullable=False)  # e.g. "forced_single_book", "forced_series_book"
+    action = db.Column(db.String(50), nullable=False)
     actor_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
-    booking_id = db.Column(db.Integer, db.ForeignKey("bookings.id"), nullable=False)
+    actor = db.relationship("User", backref="audit_entries")
     timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
-    actor = db.relationship("User", backref="audit_entries")
+    # Optional booking association
+    booking_id = db.Column(db.Integer, db.ForeignKey("bookings.id"), nullable=True)
     booking = db.relationship("Booking", backref="audit_entries")
+
+    # Optional extra information (e.g. environment name, IP, etc.)
+    details = db.Column(db.Text, nullable=True)
+
