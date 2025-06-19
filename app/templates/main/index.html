@@ -1,72 +1,119 @@
+{# templates/home.html #}
 {% extends "base.html" %}
+
+{% block title %}Home — Environment Booker{% endblock %}
+
+{% block head %}
+  {{ super() }}
+  <style>
+    /* Tweak DataTables length menu & hide search */
+    .dataTables_filter { display: none !important; }
+    .dataTables_length select {
+      min-width: 3rem;
+      display: inline-block;
+    }
+    .dataTables_length label { white-space: nowrap; }
+  </style>
+{% endblock %}
+
 {% block content %}
-  <div class="container mt-4">
-    {# flash messages will render here, including your green banner #}
+<div class="container mt-4">
 
-    <div class="row mb-4">
-      <div class="col-md-4">
-        <a href="{{ url_for('bookings.create_booking') }}"
-           class="btn btn-primary w-100 mb-2">
-          New Booking
-        </a>
-      </div>
-      <div class="col-md-4">
-        <a href="{{ url_for('bookings.list_bookings') }}"
-           class="btn btn-secondary w-100 mb-2">
-          Manage Bookings
-        </a>
-      </div>
-      {% if user.role == "admin" %}
-      <div class="col-md-4">
-        <a href="{{ url_for('environment.list_environments') }}"
-           class="btn btn-warning w-100 mb-2">
-          Manage Environments
-        </a>
-      </div>
-      {% endif %}
-    </div>
+  {# primary actions #}
+  <div class="d-flex flex-wrap gap-2 mb-4">
+    <a href="{{ url_for('bookings.create_booking') }}" class="btn btn-primary">
+      New Booking
+    </a>
+    <a href="{{ url_for('bookings.list_bookings') }}" class="btn btn-secondary">
+      Manage Bookings
+    </a>
+    {% if current_user.is_authenticated and current_user.role == 'admin' %}
+      <a href="{{ url_for('environment.list_environments') }}" class="btn btn-warning">
+        Manage Environments
+      </a>
+    {% endif %}
+  </div>
 
-    <h3>Upcoming Bookings</h3>
+  {# upcoming bookings #}
+  <h3>
+    Upcoming Bookings
     {% if upcoming %}
-      <table class="table table-hover mt-2">
-        <thead>
+      <span class="badge bg-secondary">{{ upcoming|length }}</span>
+    {% endif %}
+  </h3>
+
+  {% if upcoming %}
+    <div class="table-responsive">
+      <table id="upcomingTable" class="table table-striped table-hover mt-2">
+        <thead class="table-light">
           <tr>
             <th>Environment</th>
             <th>Start</th>
             <th>End</th>
-            {% if user.role == "admin" %}
-            <th>User</th>
+            {% if current_user.is_authenticated and current_user.role == 'admin' %}
+              <th>User</th>
             {% endif %}
-            <th></th>
+            <th class="text-center">Download .ics</th>
           </tr>
         </thead>
         <tbody>
-        {% for b in upcoming %}
-          <tr>
-            <td>{{ b.environment.name }}</td>
-            <td>{{ b.start.strftime("%Y-%m-%d %H:%M") }}</td>
-            <td>{{ b.end.strftime("%Y-%m-%d %H:%M") }}</td>
-            {% if user.role == "admin" %}
-            <td>{{ b.user.email }}</td>
-            {% endif %}
-            <td>
-              <a href="{{ url_for('bookings.download_ics', booking_id=b.id) }}"
-                 class="btn btn-sm btn-outline-info">
-                Download .ics
-              </a>
-            </td>
-          </tr>
-        {% endfor %}
+          {% for b in upcoming %}
+            <tr>
+              <td>
+                <a href="{{ url_for('bookings.edit_booking', booking_id=b.id) }}">
+                  {{ b.environment.name }}
+                </a>
+              </td>
+              <td>
+                <time datetime="{{ b.start.isoformat() }}">
+                  {{ b.start.strftime('%Y-%m-%d %H:%M') }}
+                </time>
+              </td>
+              <td>
+                <time datetime="{{ b.end.isoformat() }}">
+                  {{ b.end.strftime('%Y-%m-%d %H:%M') }}
+                </time>
+              </td>
+              {% if current_user.is_authenticated and current_user.role == 'admin' %}
+                <td>{{ b.user.email }}</td>
+              {% endif %}
+              <td class="text-center">
+                <a href="{{ url_for('bookings.download_ics', booking_id=b.id) }}"
+                   class="btn btn-sm btn-outline-info" title="Download .ics">
+                  <i class="bi bi-calendar2-plus"></i> Download .ics
+                </a>
+              </td>
+            </tr>
+          {% endfor %}
         </tbody>
       </table>
-      {% if upcoming|length == 5 %}
-        <p class="text-muted">Showing next 5 <a href="{{ url_for('bookings.list_bookings') }}">see all</a>.</p>
-      {% endif %}
-    {% else %}
-      <p class="text-muted">No upcoming bookings.</p>
+    </div>
+
+    {% if upcoming|length >= 5 %}
+      <p class="text-muted mt-2">
+        Showing first 5. <a href="{{ url_for('bookings.list_bookings') }}">See all bookings</a>.
+      </p>
     {% endif %}
 
-    <hr>
-    <p><a href="{{ url_for('auth.logout') }}" class="btn btn-link">Log out</a></p>
-  </div>
+  {% else %}
+    <p class="text-muted mt-3">You have no upcoming bookings.</p>
+  {% endif %}
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script>
+    $(function() {
+      $('#upcomingTable').DataTable({
+        dom: 'lrtip',
+        pageLength: 5,
+        lengthChange: false,
+        searching: false,
+        ordering: true,
+        columnDefs: [{ orderable: false, targets: -1 }]
+      });
+    });
+  </script>
 {% endblock %}
