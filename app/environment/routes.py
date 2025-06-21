@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request,
 from flask_login import login_required, current_user
 from app.auth.decorators import admin_required
 from app import db
-from app.models import AuditLog, Environment
+from app.models import AuditLog, Booking, Environment
 from app.environment.forms import EnvironmentForm, DeleteForm
 import logging
 
@@ -14,15 +14,34 @@ env_bp = Blueprint("environment", __name__, url_prefix="/environments")
 @login_required
 @admin_required
 def list_environments():
-    """Display list of all environments for admin users"""
+    """Display list of all environments for admin users, with stats."""
+    # 1) the full list, alphabetically
     all_envs = Environment.query.order_by(Environment.name).all()
+
+    # 2) stats for the cards
+    total_envs     = Environment.query.count()
+    total_bookings = Booking.query.count()
+
+    # 3) distinct owner squads for the filter dropdown
+    squads = [
+        row[0]
+        for row in db.session
+                       .query(Environment.owner_squad)
+                       .distinct()
+                       .order_by(Environment.owner_squad)
+                       .all()
+    ]
+
     delete_form = DeleteForm()
+
     return render_template(
         "environment/list.html",
         environments=all_envs,
-        delete_form=delete_form
+        delete_form=delete_form,
+        total_envs=total_envs,
+        total_bookings=total_bookings,
+        squads=squads,
     )
-
 
 @env_bp.route("/new", methods=["GET", "POST"])
 @login_required
