@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request,
 from flask_login import login_required, current_user
 from app.auth.decorators import admin_required
 from app import db
-from app.models import Environment
+from app.models import AuditLog, Environment
 from app.environment.forms import EnvironmentForm, DeleteForm
 import logging
 
@@ -37,7 +37,18 @@ def create_environment():
             created_by_email=current_user.email
         )
         db.session.add(env)
+        msg = (
+             f"Created environment “{env.name}”, "
+             f"owned by squad “{env.owner_squad}” "
+             f"via user {current_user.email}"
+             )
+        db.session.add(AuditLog(
+             action="create_environment",
+             actor_id=current_user.id,
+             details=msg
+         ))
         db.session.commit()
+
         logger.info(f"Environment '{env.name}' created by {current_user.email}")
         flash(f"Environment '{env.name}' created by {current_user.email}.", "success")
         return redirect(url_for("environment.list_environments"))
@@ -54,8 +65,27 @@ def edit_environment(env_id):
     form.env_id.data = str(env.id)  # Needed for uniqueness validation
 
     if form.validate_on_submit():
+        old_name  = env.name
+        old_squad = env.owner_squad
         env.name = form.name.data
         env.owner_squad = form.owner_squad.data
+
+        changes = []
+        if old_name != env.name:
+             changes.append(f"name “{old_name}”→“{env.name}”")
+        if old_squad != env.owner_squad:
+             changes.append(f"squad “{old_squad}”→“{env.owner_squad}”")
+ 
+        msg = (
+             f"Updated environment “{env.name}” (ID {env.id}): "
+               "; ".join(changes)
+         )
+        db.session.add(AuditLog(
+             action="update_environment",
+             actor_id=current_user.id,
+             details=msg
+         ))
+
         db.session.commit()
         logger.info(f"Environment '{env.name}' updated by {current_user.email}")
         flash(f"Environment '{env.name}' updated.", "success")
@@ -70,6 +100,15 @@ def edit_environment(env_id):
 def delete_environment(env_id):
     """Delete an environment after confirmation"""
     env = Environment.query.get_or_404(env_id)
+    msg = (
+         f"Deleted environment “{env.name}” "
+         f"(ID {env.id}) by user {current_user.email}"
+     )
+    db.session.add(AuditLog(
+         action="delete_environment",
+         actor_id=current_user.id,
+         details=msg
+     ))
     db.session.delete(env)
     db.session.commit()
     logger.warning(f"Environment '{env.name}' deleted by {current_user.email}")

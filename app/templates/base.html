@@ -44,13 +44,11 @@
                   Logged in as <strong>{{ current_user.role }}</strong>
                 </span>
               </li>
-              {% if current_user.role == 'admin' %}
                 <li class="nav-item me-2">
                   <a class="nav-link" href="{{ url_for('audit.list_audit') }}">
                     view Activity Log
                   </a>
                 </li>
-              {% endif %}
               <li class="nav-item">
                 <a class="nav-link" href="{{ url_for('auth.logout') }}">
                   Logout

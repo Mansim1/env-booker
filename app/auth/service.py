@@ -6,11 +6,11 @@ logger = logging.getLogger(__name__)
 
 class AuthService:
     @staticmethod
-    def register(email, password):
+    def register(email, password, role="regular"):
         """Registers a new user with email and hashed password"""
         if User.query.filter_by(email=email).first():
             return False, "That email is already registered, please log in."
-        user = User(email=email)
+        user = User(email=email, role=role)
         user.set_password(password)
         db.session.add(user)
         db.session.commit()
