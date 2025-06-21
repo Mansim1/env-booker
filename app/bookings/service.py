@@ -1,8 +1,5 @@
-# app/services/booking_service.py
-
 import json
 import logging
-import ast
 from datetime import datetime, timedelta, timezone, time, date
 from flask import Response, url_for
 from sqlalchemy import func
