@@ -2,37 +2,67 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <title>{% block title %}Environment Booker{% endblock %}</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    {# Immediately set theme so CSS loads correctly #}
+    <script>
+      (function(){
+        const theme = localStorage.getItem('theme') || 'light';
+        document.documentElement.dataset.bsTheme = theme;
+      })();
+    </script>
+
+    <title>Enviroment Booker</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- SEO & Open Graph -->
+    <meta name="description" content="Book and manage your integration environments with ease.">
+    <meta property="og:title"       content="Enviroment Booker">
+    <meta property="og:description" content="Book and manage your integration environments with ease.">
+    <meta property="og:image"
+          content="{{ url_for('static', filename='og-image.png', _external=True) }}">
+    <meta property="og:url"         content="{{ request.url }}">
+
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
 
-    <!-- Bootstrap 5 CSS (no SRI) -->
+    <!-- Bootstrap CSS (SRI + crossorigin) -->
     <link
       href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
       rel="stylesheet"
+      integrity="sha384-…"
+      crossorigin="anonymous"
     >
 
-    <!-- DataTables core CSS -->
+    <!-- DataTables CSS -->
     <link
-      rel="stylesheet"
-      href="https://cdn.datatables.net/1.13.5/css/jquery.dataTables.min.css"
-    >
-    <!-- DataTables Bootstrap 5 integration CSS -->
-    <link
-      rel="stylesheet"
       href="https://cdn.datatables.net/1.13.5/css/dataTables.bootstrap5.min.css"
+      rel="stylesheet"
+      integrity="sha384-…"
+      crossorigin="anonymous"
+    >
+
+    <!-- Bootstrap Icons -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css"
+      rel="stylesheet"
+      integrity="sha384-…"
+      crossorigin="anonymous"
     >
 
     {% block head %}{% endblock %}
   </head>
+
   <body class="d-flex flex-column min-vh-100">
-    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+    <a class="visually-hidden-focusable" href="#main-content">Skip to main content</a>
+
+    <nav class="navbar navbar-expand-lg bg-body-tertiary" role="navigation">
       <div class="container">
         <a class="navbar-brand" href="{{ url_for('main.dashboard') }}">
           Environment Booker
         </a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu"
-                aria-controls="navMenu" aria-expanded="false" aria-label="Toggle navigation">
+        <button class="navbar-toggler" type="button"
+                data-bs-toggle="collapse" data-bs-target="#navMenu"
+                aria-controls="navMenu" aria-expanded="false"
+                aria-label="Toggle navigation">
           <span class="navbar-toggler-icon"></span>
         </button>
 
@@ -40,40 +70,39 @@
           <ul class="navbar-nav ms-auto align-items-center">
             {% if current_user.is_authenticated %}
               <li class="nav-item me-3">
-                <span class="navbar-text">
-                  Logged in as <strong>{{ current_user.role }}</strong>
-                </span>
+                <span class="navbar-text">{{ current_user.email }}</span>
               </li>
-                <li class="nav-item me-2">
-                  <a class="nav-link" href="{{ url_for('audit.list_audit') }}">
-                    view Activity Log
-                  </a>
-                </li>
               <li class="nav-item">
-                <a class="nav-link" href="{{ url_for('auth.logout') }}">
-                  Logout
-                </a>
+                <a class="nav-link {% if request.endpoint.startswith('audit.') %}active{% endif %}"
+                   href="{{ url_for('audit.list_audit') }}">Activity Log</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link" href="{{ url_for('auth.logout') }}">Logout</a>
               </li>
             {% else %}
               <li class="nav-item">
-                <a class="nav-link{% if request.endpoint=='auth.login' %} active{% endif %}"
-                   href="{{ url_for('auth.login') }}">
-                  Login
-                </a>
+                <a class="nav-link {% if request.endpoint=='auth.login' %}active{% endif %}"
+                   href="{{ url_for('auth.login') }}">Login</a>
               </li>
               <li class="nav-item">
-                <a class="nav-link{% if request.endpoint=='auth.register' %} active{% endif %}"
-                   href="{{ url_for('auth.register') }}">
-                  Sign Up
-                </a>
+                <a class="nav-link {% if request.endpoint=='auth.register' %}active{% endif %}"
+                   href="{{ url_for('auth.register') }}">Sign Up</a>
               </li>
             {% endif %}
+
+            {# Dark/Light toggle #}
+            <li class="nav-item ms-3">
+              <button id="themeToggle" class="btn btn-sm btn-outline-secondary"
+                      title="Toggle dark/light mode">
+                <i class="bi"></i>
+              </button>
+            </li>
           </ul>
         </div>
       </div>
     </nav>
 
-    <main class="container flex-fill py-4">
+    <main id="main-content" class="container flex-fill py-4" role="main">
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
           {% for category, msg in messages %}
@@ -88,31 +117,62 @@
       {% block content %}{% endblock %}
     </main>
 
-    <footer class="bg-light text-center py-3 mt-auto">
+    <footer class="bg-body-tertiary text-center py-3 mt-auto" role="contentinfo">
       <div class="container">
-        <small class="text-muted">Environment Booker.</small>
+        <small class="text-muted">{{ current_year }}</small>
       </div>
     </footer>
 
-    <!-- Bootstrap JS Bundle (no SRI) -->
+    <!-- Bootstrap JS (defer + SRI + crossorigin) -->
     <script
       src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
+      integrity="sha384-…"
+      crossorigin="anonymous"
+      defer
     ></script>
-
-    <!-- jQuery (required by DataTables) -->
+    <!-- jQuery (defer) -->
     <script
       src="https://code.jquery.com/jquery-3.6.0.min.js"
+      integrity="sha384-…"
+      crossorigin="anonymous"
+      defer
     ></script>
-
-    <!-- DataTables core JS -->
+    <!-- DataTables JS (defer) -->
     <script
       src="https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js"
+      integrity="sha384-…"
+      crossorigin="anonymous"
+      defer
     ></script>
-    <!-- DataTables Bootstrap 5 integration JS -->
     <script
       src="https://cdn.datatables.net/1.13.5/js/dataTables.bootstrap5.min.js"
+      integrity="sha384-…"
+      crossorigin="anonymous"
+      defer
     ></script>
 
-    {% block scripts %}{% endblock %}
+    {% block scripts %}
+    <script>
+      document.addEventListener('DOMContentLoaded', function() {
+        const btn   = document.getElementById('themeToggle');
+        const html  = document.documentElement;
+        const icon  = btn.querySelector('i');
+
+        function refresh() {
+          const theme = html.dataset.bsTheme;
+          icon.className = theme==='dark' ? 'bi bi-sun-fill' : 'bi bi-moon-fill';
+        }
+
+        btn.addEventListener('click', () => {
+          const nxt = html.dataset.bsTheme==='dark' ? 'light' : 'dark';
+          html.dataset.bsTheme = nxt;
+          localStorage.setItem('theme', nxt);
+          refresh();
+        });
+
+        refresh();
+      });
+    </script>
+    {% endblock %}
   </body>
 </html>
