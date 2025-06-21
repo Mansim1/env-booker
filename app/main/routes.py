@@ -1,5 +1,5 @@
-from datetime import datetime, date
-from flask import Blueprint, render_template
+from datetime import datetime
+from flask import Blueprint, redirect, render_template, url_for
 from flask_login import login_required, current_user
 from sqlalchemy import func
 from app.models import Booking, Environment, AuditLog
@@ -8,6 +8,14 @@ main_bp = Blueprint("main", __name__)
 
 
 @main_bp.route("/")
+def index():
+    """Redirect to /dashboard if logged in, otherwise to the login page."""
+    if current_user.is_authenticated:
+        return redirect(url_for("main.dashboard"))
+    else:
+        return redirect(url_for("auth.login"))
+    
+    
 @main_bp.route("/dashboard")
 @login_required
 def dashboard():
