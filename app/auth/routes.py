@@ -18,7 +18,7 @@ def redirect_if_logged_in():
 
 @auth_bp.route("/register", methods=["GET", "POST"])
 def register():
-    """Handles user registration"""
+    """Handles user registration for regualr users"""
     form = RegistrationForm()
     if form.validate_on_submit():
         success, error = AuthService.register(form.email.data, form.password.data)
@@ -26,10 +26,28 @@ def register():
             flash(error, "danger")
             logger.warning(f"Registration failed for {form.email.data}: {error}")
         else:
+            logout_user()
             flash("Registration complete! Please log in.", "success")
             logger.info(f"User registered successfully: {form.email.data}")
             return redirect(url_for("auth.login"))
     return render_template("auth/register.html", form=form)
+
+@auth_bp.route("/register-admin", methods=["GET", "POST"])
+def registerAdmin():
+    """Handles user registration for ADMIN"""
+    form = RegistrationForm()
+    if form.validate_on_submit():
+        success, error = AuthService.register(form.email.data, form.password.data, "admin")
+        if not success:
+            flash(error, "danger")
+            logger.warning(f"Registration failed for {form.email.data}: {error}")
+        else:
+            logout_user()
+            flash("Registration complete! Please log in.", "success")
+            logger.info(f"User registered successfully: {form.email.data}")
+            return redirect(url_for("auth.login"))
+    return render_template("auth/register.html", form=form)
+
 
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():

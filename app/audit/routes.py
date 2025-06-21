@@ -7,23 +7,23 @@ audit_bp = Blueprint('audit', __name__, url_prefix='/audit')
 
 ACTION_LABELS = {
     "create_booking":       "Created booking",
+    "accept_suggestion":    "Created suggested booking",
     "forced_single_book":   "Forced single booking",
-    "create_series":        "Created series",
-    "create_series_summary":"Series summary",
+    "create_series":        "Created series booking",
+    "create_series_summary":"New Series summary",
     "forced_series_book":   "Forced series booking",
     "forced_series_booking_summary": "Forced series summary",
     "edit_booking":         "Edited booking",
     "forced_edit":          "Forced edit",
     "delete_booking":       "Deleted booking",
+    "create_environment":   "Created new environment",
+    "update_environment":   "Updated enviroment",
     "delete_environment":   "Deleted environment",
-    # …add any new actions here…
 }
 
 @audit_bp.route("/", methods=["GET"])
 @login_required
 def list_audit():
-    if current_user.role != "admin":
-        abort(403)
 
     action = request.args.get("action", type=str)
 

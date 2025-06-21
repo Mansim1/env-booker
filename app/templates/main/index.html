@@ -1,119 +1,188 @@
-{# templates/home.html #}
+{# templates/main/index.html #}
 {% extends "base.html" %}
 
-{% block title %}Home — Environment Booker{% endblock %}
+{% block title %}Dashboard — Environment Booker{% endblock %}
 
 {% block head %}
   {{ super() }}
+  {# Add Bootstrap Icons stylesheet #}
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css"
+  >
   <style>
-    /* Tweak DataTables length menu & hide search */
+    .stats-card { min-height: 8rem; }
+    .stats-card .display-6 { margin: 0; }
+    /* hide DataTables global search on small upcoming table */
     .dataTables_filter { display: none !important; }
-    .dataTables_length select {
-      min-width: 3rem;
-      display: inline-block;
-    }
-    .dataTables_length label { white-space: nowrap; }
+
+    /* make stats cards look nice */
+    .stats-card .card-body { padding: 1rem; }
+
+    /* clickable row hover */
+    tr.clickable-row:hover { background-color: #f8f9fa; cursor: pointer; }
   </style>
 {% endblock %}
 
 {% block content %}
 <div class="container mt-4">
 
-  {# primary actions #}
+  {# 1. Action buttons #}
   <div class="d-flex flex-wrap gap-2 mb-4">
-    <a href="{{ url_for('bookings.create_booking') }}" class="btn btn-primary">
-      New Booking
+    <a href="{{ url_for('bookings.create_booking') }}"
+       class="btn btn-primary" data-bs-toggle="tooltip" title="Book a new slot">
+      <i class="bi bi-plus-circle me-1"></i> New Booking
     </a>
-    <a href="{{ url_for('bookings.list_bookings') }}" class="btn btn-secondary">
-      Manage Bookings
+    <a href="{{ url_for('bookings.list_bookings') }}"
+       class="btn btn-secondary" data-bs-toggle="tooltip" title="Manage bookings">
+      <i class="bi bi-card-list me-1"></i> Manage Bookings
     </a>
-    {% if current_user.is_authenticated and current_user.role == 'admin' %}
-      <a href="{{ url_for('environment.list_environments') }}" class="btn btn-warning">
-        Manage Environments
+    {% if user.role == 'admin' %}
+      <a href="{{ url_for('environment.list_environments') }}"
+         class="btn btn-warning" data-bs-toggle="tooltip" title="Manage environments">
+        <i class="bi bi-hammer me-1"></i> Environments
       </a>
     {% endif %}
   </div>
 
-  {# upcoming bookings #}
-  <h3>
-    Upcoming Bookings
-    {% if upcoming %}
-      <span class="badge bg-secondary">{{ upcoming|length }}</span>
-    {% endif %}
-  </h3>
+  {# 2. Stats cards #}
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="card stats-card text-center">
+        <div class="card-body">
+          <h6 class="card-title">Upcoming</h6>
+          <p class="display-6">{{ upcoming_count }}</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card stats-card text-center">
+        <div class="card-body">
+          <h6 class="card-title">Environment</h6>
+          <p class="display-6">{{ env_count }}</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card stats-card text-center">
+        <div class="card-body">
+          <h6 class="card-title">Hours Today</h6>
+          <p class="display-6">{{ hours_today }}</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card stats-card text-center">
+        <div class="card-body">
+          <h6 class="card-title">Your Next</h6>
+          {% if next_booking %}
+            <p class="mb-0">{{ next_booking.start.strftime('%H:%M') }}</p>
+            <small class="text-muted">{{ next_booking.environment.name }}</small>
+          {% else %}
+            <p class="mb-0">—</p>
+            <small class="text-muted">No bookings</small>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
 
+  {# 3. Next booking banner #}
+  {% if next_booking %}
+    <div class="alert alert-info d-flex align-items-center mb-4">
+      <i class="bi bi-clock-fill fs-2 me-3"></i>
+      <div>
+        Next booking:
+        <strong>{{ next_booking.environment.name }}</strong> at
+        <time datetime="{{ next_booking.start.isoformat() }}"
+              class="timeago">{{ next_booking.start }}</time>
+      </div>
+    </div>
+  {% endif %}
+
+  {# 5. Upcoming bookings table #}
+  <h5>Upcoming Bookings</h5>
   {% if upcoming %}
     <div class="table-responsive">
-      <table id="upcomingTable" class="table table-striped table-hover mt-2">
+      <table id="upcomingTable" class="table table-striped table-hover">
         <thead class="table-light">
           <tr>
             <th>Environment</th>
             <th>Start</th>
             <th>End</th>
-            {% if current_user.is_authenticated and current_user.role == 'admin' %}
+            {% if user.role == 'admin' %}
               <th>User</th>
             {% endif %}
-            <th class="text-center">Download .ics</th>
+            <th class="text-center">.ics</th>
           </tr>
         </thead>
         <tbody>
           {% for b in upcoming %}
-            <tr>
-              <td>
-                <a href="{{ url_for('bookings.edit_booking', booking_id=b.id) }}">
-                  {{ b.environment.name }}
-                </a>
-              </td>
-              <td>
-                <time datetime="{{ b.start.isoformat() }}">
-                  {{ b.start.strftime('%Y-%m-%d %H:%M') }}
-                </time>
-              </td>
-              <td>
-                <time datetime="{{ b.end.isoformat() }}">
-                  {{ b.end.strftime('%Y-%m-%d %H:%M') }}
-                </time>
-              </td>
-              {% if current_user.is_authenticated and current_user.role == 'admin' %}
-                <td>{{ b.user.email }}</td>
-              {% endif %}
-              <td class="text-center">
-                <a href="{{ url_for('bookings.download_ics', booking_id=b.id) }}"
-                   class="btn btn-sm btn-outline-info" title="Download .ics">
-                  <i class="bi bi-calendar2-plus"></i> Download .ics
-                </a>
-              </td>
-            </tr>
+          <tr class="clickable-row"
+              onclick="window.location.href=`{{ url_for('bookings.edit_booking', booking_id=b.id) }}`;">
+            <td>{{ b.environment.name }}</td>
+            <td>{{ b.start.strftime('%Y-%m-%d %H:%M') }}</td>
+            <td>{{ b.end.strftime('%Y-%m-%d %H:%M') }}</td>
+            {% if user.role == 'admin' %}
+              <td>{{ b.user.email }}</td>
+            {% endif %}
+            <td class="text-center">
+              <a href="{{ url_for('bookings.download_ics', booking_id=b.id) }}"
+                 class="btn btn-sm btn-outline-info" title="Download .ics">
+                <i class="bi bi-calendar2-plus"></i>
+              </a>
+            </td>
+          </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
-
-    {% if upcoming|length >= 5 %}
-      <p class="text-muted mt-2">
-        Showing first 5. <a href="{{ url_for('bookings.list_bookings') }}">See all bookings</a>.
-      </p>
-    {% endif %}
-
+    <p class="text-muted mt-2">
+      Showing up to 5. <a href="{{ url_for('bookings.list_bookings') }}">See all</a>.
+    </p>
   {% else %}
-    <p class="text-muted mt-3">You have no upcoming bookings.</p>
+    <p class="text-muted">No upcoming bookings.</p>
   {% endif %}
-
 </div>
+
+{# 4. Recent activity (admin) #}
+{% if activity_feed %}
+  <h5>Recent Activity</h5>
+  <ul class="list-group mb-4">
+    {% for log in activity_feed %}
+      <li class="list-group-item">
+        <small class="text-muted">{{ log.timestamp.strftime('%Y-%m-%d %H:%M') }}</small><br>
+        {{ log.details }}
+      </li>
+    {% endfor %}
+  </ul>
+{% endif %}
 {% endblock %}
+
 
 {% block scripts %}
   {{ super() }}
+  <!-- timeago.js for relative timestamps -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/timeago.js/4.0.2/timeago.min.js"></script>
   <script>
-    $(function() {
+    document.addEventListener('DOMContentLoaded', function() {
+      // Render “timeago” relative times
+      timeago.render(document.querySelectorAll('.timeago'));
+
+      // Initialize DataTable, sorted soonest-first
       $('#upcomingTable').DataTable({
         dom: 'lrtip',
         pageLength: 5,
         lengthChange: false,
         searching: false,
-        ordering: true,
+        order: [[1, 'asc']],
         columnDefs: [{ orderable: false, targets: -1 }]
       });
+
+      // Enable Bootstrap tooltips
+      document
+        .querySelectorAll('[data-bs-toggle="tooltip"]')
+        .forEach(el => new bootstrap.Tooltip(el));
     });
   </script>
 {% endblock %}

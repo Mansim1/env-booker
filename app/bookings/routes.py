@@ -7,7 +7,7 @@ from markupsafe import Markup
 from datetime import datetime
 from app import db
 from app.environment.forms import DeleteForm
-from app.models import AuditLog, Environment, Booking
+from app.models import Environment, Booking
 from app.bookings.forms import BookingForm, SeriesBookingForm
 from app.bookings.service import BookingService
 import logging
@@ -21,13 +21,27 @@ bookings_bp = Blueprint("bookings", __name__, url_prefix="/bookings")
 @bookings_bp.route("/")
 @login_required
 def list_bookings():
-    """Displays bookings list for current user or all bookings if admin"""
-    logger.debug("Fetching bookings for user: %s", current_user.email)
-    q = Booking.query.order_by(Booking.start)
-    if current_user.role != "admin":
-        q = q.filter_by(user_id=current_user.id)
-    return render_template("bookings/list.html", bookings=q.all(), delete_form=DeleteForm())
+    """Displays upcoming bookings. Admins can switch between All/My."""
+    now = datetime.utcnow()
+    base_q = Booking.query.filter(Booking.start >= now).order_by(Booking.start)
 
+    # figure out which view to show
+    if current_user.role == "admin":
+        view = request.args.get("view", "all")
+        if view == "mine":
+            bookings = base_q.filter_by(user_id=current_user.id).all()
+        else:
+            bookings = base_q.all()
+    else:
+        view = "mine"
+        bookings = base_q.filter_by(user_id=current_user.id).all()
+
+    return render_template(
+        "bookings/list.html",
+        bookings=bookings,
+        delete_form=DeleteForm(),
+        view=view
+    )
 
 @bookings_bp.route("/new", methods=["GET", "POST"])
 @login_required
@@ -197,8 +211,8 @@ def accept_series_suggestion():
         logger.warning("Series suggestion booking failed for user %s", current_user.email)
         flash("Could not create suggested series booking.", "danger")
         return redirect(url_for("bookings.create_series_booking"))
-    count = res
-    flash(f"Series booking confirmed: {count} slots for {params['env_name']}.", "success")
+    [count, succes] = res
+    flash(f"Series booking confirmed: {count} slots.", "success")
     return redirect(url_for("bookings.list_bookings"))
 
 

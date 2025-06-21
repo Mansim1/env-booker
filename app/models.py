@@ -49,11 +49,6 @@ class AuditLog(db.Model):
     actor_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     actor = db.relationship("User", backref="audit_entries")
     timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-
-    # Optional booking association
-    booking_id = db.Column(db.Integer, db.ForeignKey("bookings.id"), nullable=True)
-    booking = db.relationship("Booking", backref="audit_entries")
-
     # Optional extra information (e.g. environment name, IP, etc.)
     details = db.Column(db.Text, nullable=True)
 
