@@ -117,19 +117,33 @@ def edit_environment(env_id):
 @login_required
 @admin_required
 def delete_environment(env_id):
-    """Delete an environment after confirmation"""
+    """Delete an environment after confirmation, only if no bookings exist."""
     env = Environment.query.get_or_404(env_id)
+
+    # 1) check for existing bookings
+    count = Booking.query.filter_by(environment_id=env.id).count()
+    if count:
+        flash(
+            f"Cannot delete environment '{env.name}' because there "
+            f"{'is' if count==1 else 'are'} {count} existing booking"
+            f"{'' if count==1 else 's'}.",
+            "danger"
+        )
+        return redirect(url_for("environment.list_environments"))
+
+    # 2) log and perform deletion
     msg = (
-         f"Deleted environment “{env.name}” "
-         f"(ID {env.id}) by user {current_user.email}"
-     )
+        f"Deleted environment “{env.name}” (ID {env.id}) "
+        f"by user {current_user.email}"
+    )
     db.session.add(AuditLog(
-         action="delete_environment",
-         actor_id=current_user.id,
-         details=msg
-     ))
+        action="delete_environment",
+        actor_id=current_user.id,
+        details=msg
+    ))
     db.session.delete(env)
     db.session.commit()
-    logger.warning(f"Environment '{env.name}' deleted by {current_user.email}")
+
     flash(f"Environment '{env.name}' deleted.", "success")
+    logger.warning(f"Environment '{env.name}' deleted by {current_user.email}")
     return redirect(url_for("environment.list_environments"))
