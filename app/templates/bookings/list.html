@@ -3,11 +3,16 @@
 
 {% block head %}
   {{ super() }}
+  {# Bootstrap Icons #}
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css"
+  >
   <style>
     /* Hide DataTables’ built-in global search */
     .dataTables_filter { display: none !important; }
 
-    /* Give “Show … entries” dropdown a sensible width */
+    /* “Show … entries” dropdown width */
     .dataTables_length select {
       min-width: 4rem;
       padding-right: 1.5rem;
@@ -15,10 +20,8 @@
     }
     .dataTables_length label { white-space: nowrap; }
 
-    /* Segmented control styling for admin toggle */
-    .btn-group-toggle .btn {
-      border-radius: 0;
-    }
+    /* Segmented toggle style */
+    .btn-group-toggle .btn { border-radius: 0; }
     .btn-group-toggle .btn:first-child {
       border-top-left-radius: .25rem;
       border-bottom-left-radius: .25rem;
@@ -27,11 +30,22 @@
       border-top-right-radius: .25rem;
       border-bottom-right-radius: .25rem;
     }
-    .btn-group-toggle .btn.active,
-    .btn-group-toggle .btn:active {
+    .btn-group-toggle .btn.active {
       background-color: #e9ecef !important;
       color: #212529 !important;
       border-color: #e9ecef !important;
+    }
+
+    /* Clickable row hover */
+    tr.clickable-row:hover {
+      background-color: #f8f9fa;
+      cursor: pointer;
+    }
+
+    /* Filter inputs */
+    #bookingSearch, #dateFilter, #userFilter {
+      max-width: 200px;
+      margin-right: .5rem;
     }
   </style>
 {% endblock %}
@@ -40,18 +54,48 @@
 
 {% block content %}
 <div class="container mt-4">
-  <h2>Bookings</h2>
 
-  <div class="mb-3">
-    <a href="{{ url_for('bookings.create_booking') }}" class="btn btn-primary me-2">
-      New Booking
-    </a>
-    <a href="{{ url_for('bookings.create_series_booking') }}" class="btn btn-secondary">
-      New Series Booking
-    </a>
+  {# Actions & Stats #}
+  <div class="d-flex flex-wrap align-items-center mb-3">
+    <div class="me-auto">
+      <a href="{{ url_for('bookings.create_booking') }}"
+         class="btn btn-primary me-2"
+         data-bs-toggle="tooltip"
+         title="Book a new slot">
+        <i class="bi bi-plus-circle me-1"></i> New Booking
+      </a>
+      <a href="{{ url_for('bookings.create_series_booking') }}"
+         class="btn btn-secondary"
+         data-bs-toggle="tooltip"
+         title="Book a recurring series">
+        <i class="bi bi-collection me-1"></i> New Series
+      </a>
+    </div>
+    <div class="me-3">
+      <span class="badge bg-info">
+        Viewing {{ bookings|length }} booking{{ '' if bookings|length==1 else 's' }}
+      </span>
+    </div>
   </div>
 
-  {% if current_user.role == 'admin' %}
+  {# Custom filters #}
+  <div class="d-flex flex-wrap gap-2 mb-3">
+    <input id="bookingSearch"
+           class="form-control"
+           placeholder="Search environment…">
+    <input id="dateFilter"
+           type="date"
+           class="form-control"
+           title="Filter by start date">
+    {% if current_user.role=='admin' %}
+      <input id="userFilter"
+             class="form-control"
+             placeholder="Filter by user…">
+    {% endif %}
+  </div>
+
+  {# Admin toggle All/My #}
+  {% if current_user.role=='admin' %}
     <div class="btn-group btn-group-toggle mb-3" data-bs-toggle="buttons">
       <a href="{{ url_for('bookings.list_bookings', view='all') }}"
          class="btn btn-outline-secondary {% if view=='all' %}active{% endif %}">
@@ -64,6 +108,7 @@
     </div>
   {% endif %}
 
+  {# Bookings table #}
   {% if bookings %}
     <div class="table-responsive">
       <table id="bookingTable" class="table table-striped table-hover">
@@ -72,40 +117,41 @@
             <th>Environment</th>
             <th>Start</th>
             <th>End</th>
-            {% if current_user.role == 'admin' %}
+            {% if current_user.role=='admin' %}
               <th>User</th>
             {% endif %}
-            <th>Add to Calendar</th>
-            <th>Actions</th>
+            <th class="text-center">.ics</th>
+            <th class="text-end">Actions</th>
           </tr>
         </thead>
         <tbody>
           {% for b in bookings %}
-          <tr>
+          <tr class="clickable-row"
+              data-href="{{ url_for('bookings.edit_booking', booking_id=b.id) }}">
             <td>{{ b.environment.name }}</td>
             <td>{{ b.start.strftime('%Y-%m-%d %H:%M') }}</td>
             <td>{{ b.end.strftime('%Y-%m-%d %H:%M') }}</td>
-            {% if current_user.role == 'admin' %}
+            {% if current_user.role=='admin' %}
               <td>{{ b.user.email }}</td>
             {% endif %}
-            <td>
-              <a
-                href="{{ url_for('bookings.download_ics', booking_id=b.id) }}"
-                class="btn btn-sm btn-outline-secondary"
-              >Download .ics</a>
+            <td class="text-center">
+              <a href="{{ url_for('bookings.download_ics', booking_id=b.id) }}"
+                 class="btn btn-sm btn-outline-info"
+                 data-bs-toggle="tooltip"
+                 title="Download .ics">
+                <i class="bi bi-calendar2-plus"></i>
+              </a>
             </td>
-            <td>
-              {% if current_user.role == 'admin' or current_user.id == b.user_id %}
-                <a
-                  href="{{ url_for('bookings.edit_booking', booking_id=b.id) }}"
-                  class="btn btn-sm btn-outline-primary me-1"
-                >Edit</a>
-                <button
-                  class="btn btn-sm btn-outline-danger"
-                  data-bs-toggle="modal"
-                  data-bs-target="#deleteModal{{ b.id }}"
-                >Delete</button>
-              {% endif %}
+            <td class="text-end">
+              <button type="button"
+                      class="btn btn-sm btn-outline-danger delete-btn"
+                      data-bs-toggle="modal"
+                      data-bs-target="#deleteModal{{ b.id }}"
+                      data-action-url="{{ url_for('bookings.delete_booking', booking_id=b.id) }}"
+                      data-env-name="{{ b.environment.name }}"
+                      title="Delete booking">
+                <i class="bi bi-trash"></i>
+              </button>
             </td>
           </tr>
           {% endfor %}
@@ -113,40 +159,28 @@
       </table>
     </div>
 
+    {# Delete modals #}
     {% for b in bookings %}
-    <div
-      class="modal fade"
-      id="deleteModal{{ b.id }}"
-      tabindex="-1"
-      aria-labelledby="deleteModalLabel{{ b.id }}"
-      aria-hidden="true"
-    >
-      <div class="modal-dialog">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title" id="deleteModalLabel{{ b.id }}">Confirm Delete</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-          </div>
-          <div class="modal-body">
-            Are you sure you want to delete the booking for
-            <strong>{{ b.environment.name }}</strong> from
-            {{ b.start.strftime('%Y-%m-%d %H:%M') }} to
-            {{ b.end.strftime('%Y-%m-%d %H:%M') }}?
-          </div>
-          <div class="modal-footer">
-            <form
-              method="post"
-              action="{{ url_for('bookings.delete_booking', booking_id=b.id) }}"
-            >
-              {{ delete_form.csrf_token }}
-              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                Cancel
-              </button>
-              {{ delete_form.submit(class="btn btn-danger") }}
-            </form>
-          </div>
+    <div class="modal fade" id="deleteModal{{ b.id }}" tabindex="-1" aria-labelledby="deleteModalLabel{{ b.id }}" aria-hidden="true">
+      <div class="modal-dialog"><div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="deleteModalLabel{{ b.id }}">Confirm Delete</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
-      </div>
+        <div class="modal-body">
+          Are you sure you want to delete the booking for
+          <strong>{{ b.environment.name }}</strong> from
+          {{ b.start.strftime('%Y-%m-%d %H:%M') }} to
+          {{ b.end.strftime('%Y-%m-%d %H:%M') }}?
+        </div>
+        <div class="modal-footer">
+          <form method="post" action="{{ url_for('bookings.delete_booking', booking_id=b.id) }}">
+            {{ delete_form.csrf_token }}
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            {{ delete_form.submit(class="btn btn-danger") }}
+          </form>
+        </div>
+      </div></div>
     </div>
     {% endfor %}
 
@@ -160,14 +194,57 @@
   {{ super() }}
   <script>
     $(function() {
-      $('#bookingTable').DataTable({
-        dom: 'lfrtip',
-        searching: false,
-        order: [[1, 'asc']],
+      // Initialize DataTable without its default search box
+      var table = $('#bookingTable').DataTable({
+        dom:
+          "<'row mb-3'<'col-md-6'l><'col-md-6 text-end'>>" +
+          "<'table-responsive't>" +
+          "<'row mt-3'<'col-sm-5'i><'col-sm-7'p>>",
+        order: [[1,'asc']],
         pageLength: 10,
-        lengthMenu: [[10, 25, 50], [10, 25, 50]],
+        lengthMenu: [[10,25,50],[10,25,50]],
         columnDefs: [{ orderable: false, targets: -1 }]
       });
+
+      // Global search on environment column
+      $('#bookingSearch').on('keyup', function(){
+        table.column(0).search(this.value).draw();
+      });
+
+      // Date filter on Start column (regex match for YYYY-MM-DD)
+      $('#dateFilter').on('change', function(){
+        var v = this.value ? '^' + this.value : '';
+        table.column(1).search(v, true, false).draw();
+      });
+
+      // User filter (admin only) on User column
+      $('#userFilter').on('keyup', function(){
+        table.column(3).search(this.value).draw();
+      });
+
+      // Make entire row clickable to edit
+      $('#bookingTable tbody').on('click', 'tr.clickable-row', function(e){
+        // Ignore clicks on buttons/links
+        if ($(e.target).closest('button, a').length) return;
+        window.location = $(this).data('href');
+      });
+
+      // Bind delete‐modal for ALL modals
+      $('.modal.fade').on('show.bs.modal', function(e) {
+        var btn    = $(e.relatedTarget);
+        var action = btn.data('action-url');
+        var env    = btn.data('env-name');
+        var modal  = $(this);
+
+        modal.find('form').attr('action', action);
+        modal.find('.modal-body').text(
+          `Are you sure you want to delete the booking for "${env}"?`
+        );
+      });
+
+      // Enable Bootstrap tooltips
+      $('[data-bs-toggle="tooltip"]').tooltip();
     });
   </script>
 {% endblock %}
+
