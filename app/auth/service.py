@@ -21,6 +21,7 @@ class AuthService:
     def authenticate(email, password):
         """Authenticates a user by email and password"""
         user = User.query.filter_by(email=email).first()
+        logger.warning(f"Login- user found with email: {user.email}")
         if user and user.check_password(password):
             return user
         return None
