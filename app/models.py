@@ -1,10 +1,7 @@
-import logging
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from app import db
 from datetime import datetime, timezone
-
-logger = logging.getLogger(__name__)
 
 class User(db.Model, UserMixin):
     __tablename__ = "users"
@@ -14,10 +11,13 @@ class User(db.Model, UserMixin):
     role = db.Column(db.String(20), default="regular", nullable=False)
 
     def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
+        self.password_hash = generate_password_hash(
+            password,
+            method="pbkdf2:sha256",
+            salt_length=8
+        )
 
     def check_password(self, password):
-        logger.warning(f"Login- comparing these hashes: {self.password_hash} and {password}")
         return check_password_hash(self.password_hash, password)
 
 class Environment(db.Model):
