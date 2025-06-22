@@ -1,7 +1,10 @@
+from flask import logging
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from app import db
 from datetime import datetime, timezone
+
+logger = logging.getLogger(__name__)
 
 class User(db.Model, UserMixin):
     __tablename__ = "users"
@@ -14,6 +17,7 @@ class User(db.Model, UserMixin):
         self.password_hash = generate_password_hash(password)
 
     def check_password(self, password):
+        logger.warning(f"Login- comparing these hashes: {self.password_hash} and {password}")
         return check_password_hash(self.password_hash, password)
 
 class Environment(db.Model):
