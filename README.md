@@ -7,8 +7,11 @@
 A Flask web app to book and manage shared testing environments.Supports **regular** users and **admins**.
 
 Hosted Application: https://mansim.pythonanywhere.com/
+
 Demo Accounts:
+
 Regular user: user@example.com / Password9!
+
 Admin user: admin@example.com / Admin123!
 
 ---
