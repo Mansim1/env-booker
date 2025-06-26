@@ -1,9 +1,9 @@
 repos:
   - repo: https://github.com/psf/black
-    rev: 23.3.0           # <- pin to the latest Black release
+    rev: 23.3.0
     hooks:
       - id: black
   - repo: https://github.com/charliermarsh/ruff-pre-commit
-    rev: v0.0.284         # <- pin to a recent Ruff release
+    rev: v0.0.284
     hooks:
       - id: ruff
