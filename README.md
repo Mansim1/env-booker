@@ -4,8 +4,8 @@
 [![Flask Version](https://img.shields.io/badge/flask-2.x-green)](https://flask.palletsprojects.com/)  
 [![License](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 
-A Flask web app to book and manage shared testing environments.  
-Supports **regular** users and **admins**.
+A Flask web app to book and manage shared testing environments.Supports **regular** users and **admins**.
+
 Hosted Application: https://mansim.pythonanywhere.com/
 
 ---
