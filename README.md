@@ -88,7 +88,7 @@ DATABASE_URL="sqlite:///instance/dev.db"
 1. **Clone & venv**
 
    ```bash
-   git clone https://github.com/yourusername/env-booker.git
+   git clone https://github.com/Mansim1/env-booker.git
    cd env-booker
    python3 -m venv .venv
    source .venv/bin/activate
